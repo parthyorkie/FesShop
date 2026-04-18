@@ -1,0 +1,240 @@
+### API USAGE GUIDE
+### ----------------------------------------------------
+### PREREQUISITES:
+### 1. Install "REST Client" extension in VS Code.
+### 2. Make sure your server is running (`npm run dev` or `npm run start`).
+### 3. Replace the `@token` variable below with a valid JWT token. 
+###    (For Admin endpoints, make sure the JWT payload has { "role": "ADMIN" })
+
+### Prerequisites Variables
+@baseUrl = http://localhost:3000/api
+@token = YOUR_VALID_JWT_TOKEN
+@categoryId = REPLACE_WITH_CATEGORY_ID
+@productId = REPLACE_WITH_PRODUCT_ID
+@userId = REPLACE_WITH_USER_ID
+@companyId = REPLACE_WITH_COMPANY_ID
+
+### ====================================================
+### 🔐 AUTH APIs
+### ====================================================
+
+### 1. Register User
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "Password123"
+}
+
+### ----------------------------------------------------
+### 2. Login User
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "Password123"
+}
+
+### ----------------------------------------------------
+### 3. Logout User
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 4. Forgot Password
+POST {{baseUrl}}/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "john@example.com"
+}
+
+### ----------------------------------------------------
+### 5. Reset Password
+# Pass your OTP directly into the body here
+POST {{baseUrl}}/auth/reset-password/YOUR_OTP_TOKEN
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "otp": "123456",
+  "password": "NewPassword123"
+}
+
+### ====================================================
+### 📦 CATEGORY APIs
+### ====================================================
+
+### 1. Create Category [ADMIN]
+# Requires: name (string, required)
+# Response: 201 Created with category object
+POST {{baseUrl}}/categories
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Electronics"
+}
+
+### ----------------------------------------------------
+### 2. List Categories [PUBLIC/USER]
+# Supports optional queries: ?page=1&limit=10&search=electro&startDate=2024-01-01&endDate=2024-12-31
+# Response: 200 OK with paginated categories array
+GET {{baseUrl}}/categories?page=1&limit=10
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 3. Get Single Category [PUBLIC/USER]
+# Requires: valid category ID (24-char hex)
+# Response: 200 OK with category object or 404 if not found
+GET {{baseUrl}}/categories/{{categoryId}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 4. Update Category [ADMIN]
+# Requires: valid category ID, optional name
+# Response: 200 OK with updated category object
+PUT {{baseUrl}}/categories/{{categoryId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Home Appliances"
+}
+
+### ----------------------------------------------------
+### 5. Delete Category (Soft Delete) [ADMIN]
+# Requires: valid category ID
+# Response: 200 OK with success message
+DELETE {{baseUrl}}/categories/{{categoryId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+
+### ====================================================
+### 📦 PRODUCT APIs
+### ====================================================
+
+### 1. Create Product [ADMIN]
+# IMPORTANT: "categories" must be an array of valid Category ObjectId(s).
+# "company" is required. "festivals", "price", "stock", "attributes" are optional.
+POST {{baseUrl}}/products
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Samsung Galaxy S24",
+  "categories": ["{{categoryId}}"],
+  "company": "{{companyId}}",
+  "festivals": [],
+  "price": 999.99,
+  "stock": 50,
+  "attributes": {
+    "color": "Black",
+    "storage": "256GB"
+  }
+}
+
+### ----------------------------------------------------
+### 2. List Products [PUBLIC/USER]
+# Supports optional queries: ?page=1&limit=10&search=samsung&categories=ID&festival=ID&company=ID&startDate=2024-01-01&endDate=2024-12-31
+GET {{baseUrl}}/products?page=1&limit=10
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 3. Get Single Product [PUBLIC/USER]
+GET {{baseUrl}}/products/{{productId}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 4. Update Product [ADMIN]
+PUT {{baseUrl}}/products/{{productId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Samsung Galaxy S24 Ultra",
+  "categories": ["{{categoryId}}"],
+  "company": "{{companyId}}",
+  "festivals": [],
+  "price": 1199.99,
+  "stock": 30,
+  "attributes": {
+    "color": "Black",
+    "storage": "512GB"
+  }
+}
+
+### ----------------------------------------------------
+### 5. Delete Product (Soft Delete) [ADMIN]
+DELETE {{baseUrl}}/products/{{productId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+
+### ====================================================
+### 👥 USER MANAGEMENT APIs [ADMIN ONLY]
+### ====================================================
+
+### 1. Create User [ADMIN]
+# Creates a new user with hashed password
+POST {{baseUrl}}/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Jane Smith",
+  "email": "jane@example.com",
+  "password": "SecurePass123",
+  "role": "USER"
+}
+
+### ----------------------------------------------------
+### 2. List All Users [ADMIN]
+# Supports optional queries: ?page=1&limit=10&search=jane&role=USER&startDate=2024-01-01&endDate=2024-12-31
+GET {{baseUrl}}/users?page=1&limit=10
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 3. Get Single User [ADMIN]
+GET {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 4. Update User [ADMIN]
+# Can update: name, email, role
+# Cannot update password through this endpoint (use change-password instead)
+PUT {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Jane Doe Smith",
+  "role": "ADMIN"
+}
+
+### ----------------------------------------------------
+### 5. Delete User - Soft Delete [ADMIN]
+# User data is preserved but marked as deleted
+DELETE {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 6. Change Password [AUTHENTICATED USER]
+# Any authenticated user can change their own password
+# Requires old password verification
+POST {{baseUrl}}/users/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "oldPassword": "CurrentPassword123",
+  "newPassword": "NewPassword456"
+}
