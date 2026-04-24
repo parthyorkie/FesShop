@@ -132,10 +132,12 @@ const validateCompany = async (companyId?: Types.ObjectId) => {
 
 // ✅ CREATE
 export const createProductService = async (data: Partial<IProduct>) => {
+  console.log("Validating product data:", data);  
   await validateCategories(data.categories || []);
-  await validateFestivals(data.festivals || []);
-  await validateCompany(data.company || undefined);
+  // await validateFestivals(data.festivals || []);
+  // await validateCompany(data.company || undefined);
 
+  console.log("data from create product service ", data);
   return await productRepo.createProductInDb(data);
 };
 
@@ -169,10 +171,10 @@ export const listProductsService = async (query: any) => {
   //   filter.categories = query.category;
   // }
 
-  if (query?.category) {
-    const categories = Array.isArray(query.category)
-      ? query.category
-      : (query.category as string).split(",");
+  if (query?.categories ) {
+    const categories = Array.isArray(query.categories)
+      ? query.categories
+      : (query.categories as string).split(",");
 
     filter.categories = { $in: categories };
   }
@@ -208,6 +210,7 @@ export const listProductsService = async (query: any) => {
     limit,
   );
 
+  console.log("data from list product service ", data);
   const pagination = formatPaginationData(total, page, limit);
 
   return { data, pagination };
@@ -218,17 +221,19 @@ export const updateProductService = async (
   id: string,
   updateData: Partial<IProduct>,
 ) => {
+
+  console.log("update data from update product service ", updateData);
   if (updateData.categories) {
     await validateCategories(updateData.categories as Types.ObjectId[]);
   }
 
-  if (updateData.festivals) {
-    await validateFestivals(updateData.festivals as Types.ObjectId[]);
-  }
+  // if (updateData.festivals) {
+  //   await validateFestivals(updateData.festivals as Types.ObjectId[]);
+  // }
 
-  if (updateData.company) {
-    await validateCompany(updateData.company as Types.ObjectId);
-  }
+  // if (updateData.company) {
+  //   await validateCompany(updateData.company as Types.ObjectId);
+  // }
 
   const product = await productRepo.updateProductInDb(id, updateData);
 

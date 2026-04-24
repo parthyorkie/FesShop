@@ -1,6 +1,8 @@
 import Joi from 'joi';
 
 const objectId = (value: string, helpers: any) => {
+  console.log("Validating ObjectId:", value);
+ 
   if (!value.match(/^[0-9a-fA-F]{24}$/)) {
     return helpers.message('"{{#label}}" must be a valid mongo id');
   }
@@ -14,10 +16,10 @@ export const createProductSchema = {
     categories: Joi.array().items(Joi.string().custom(objectId)).required(),
     
     // Added new fields allowed by your updated model
-    festivals: Joi.array().items(Joi.string().custom(objectId)),
+    festivals: Joi.array().items(Joi.string().custom(objectId)).optional(),
     
     // "company" is required in your Mongoose schema
-    company: Joi.string().custom(objectId).required(),
+    company: Joi.string().custom(objectId).optional().empty(''),
     
     price: Joi.number().min(0),
     stock: Joi.number().integer().min(0),
@@ -34,10 +36,10 @@ export const updateProductSchema = {
     name: Joi.string().trim(),
     categories: Joi.array().items(Joi.string().hex().length(24)).min(1),
     // Added new fields allowed by your updated model
-    festivals: Joi.array().items(Joi.string().custom(objectId)),
+    festivals: Joi.array().items(Joi.string().custom(objectId)).optional(),
     
     // "company" is required in your Mongoose schema
-    company: Joi.string().custom(objectId).required(),
+    company: Joi.string().custom(objectId).optional().empty(''),
     
     price: Joi.number().min(0),
     stock: Joi.number().integer().min(0),

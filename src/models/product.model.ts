@@ -47,8 +47,8 @@ import { Document, Schema, Types, model } from "mongoose";
 export interface IProduct extends Document {
   name: string;
   categories: Types.ObjectId[];
-  festivals: Types.ObjectId[];
-  company: Types.ObjectId;
+  festivals?: Types.ObjectId[];
+  company?: Types.ObjectId;
   price: number;
   stock: number;
   attributes: Map<string, string>;
@@ -67,7 +67,7 @@ const ProductSchema = new Schema<IProduct>(
     company: {
       type: Schema.Types.ObjectId,
       ref: "Company",
-      required: true,
+      // required: true,
     },
 
     price: Number,

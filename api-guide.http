@@ -141,7 +141,7 @@ Content-Type: application/json
 
 ### ----------------------------------------------------
 ### 2. List Products [PUBLIC/USER]
-# Supports optional queries: ?page=1&limit=10&search=samsung&categories=ID&festival=ID&company=ID&startDate=2024-01-01&endDate=2024-12-31
+# Supports optional queries: ?page=1&limit=10&search=samsung&category=ID1,ID2&festivals=ID1,ID2&company=ID&startDate=2024-01-01&endDate=2024-12-31
 GET {{baseUrl}}/products?page=1&limit=10
 Content-Type: application/json
 
