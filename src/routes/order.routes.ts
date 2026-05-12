@@ -1,19 +1,20 @@
 import { Router } from "express";
 import {
-    createOrder,
-    deleteOrder,
-    getOrder,
-    listOrders,
-    updateOrder,
+  createOrder,
+  deleteOrder,
+  getOrder,
+  listOrders,
+  reorder,
+  updateOrder,
 } from "../controllers/order.controller";
 
 import { validate } from "../middlewares/validate.middleware";
 import {
-    createOrderSchema,
-    deleteOrderSchema,
-    getOrderSchema,
-    listOrdersSchema,
-    updateOrderSchema,
+  createOrderSchema,
+  deleteOrderSchema,
+  getOrderSchema,
+  listOrdersSchema,
+  updateOrderSchema,
 } from "../validations/order.validation";
 
 import { authenticate, authorizeRole } from "../middlewares/auth.middleware";
@@ -64,6 +65,15 @@ router.delete(
   authorizeRole("ADMIN"),
   validate(deleteOrderSchema),
   deleteOrder
+);
+
+// ✅ REORDER
+router.post(
+  "/reorder/:id",
+  authenticate,
+  authorizeRole("ADMIN"),
+  validate(deleteOrderSchema), // Reuse delete schema for ID validation
+  reorder
 );
 
 

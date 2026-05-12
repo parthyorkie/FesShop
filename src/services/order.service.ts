@@ -5,7 +5,10 @@ import * as productRepo from "../repositories/product.repository";
 
 import { IOrder } from "../models/order.model";
 import { createApiError } from "../utils/ApiError";
-import { formatPaginationData, getPaginationOptions } from "../utils/pagination";
+import {
+  formatPaginationData,
+  getPaginationOptions,
+} from "../utils/pagination";
 
 // 🔹 Validate Products (important for order integrity)
 const validateProducts = async (items: IOrder["items"]) => {
@@ -13,13 +16,13 @@ const validateProducts = async (items: IOrder["items"]) => {
     throw createApiError(400, "Order must have at least one item");
   }
 
-  const productIds = items.map(item => item.product.toString());
+  const productIds = items.map((item) => item.product.toString());
 
   const count = await Promise.all(
-    productIds.map(id => productRepo.findProductById(id))
+    productIds.map((id) => productRepo.findProductById(id)),
   );
 
-  if (count.some(p => !p)) {
+  if (count.some((p) => !p)) {
     throw createApiError(400, "One or more products are invalid");
   }
 };
@@ -35,8 +38,6 @@ const validateFestival = async (festival?: Types.ObjectId) => {
   }
 };
 
-
-
 // ✅ CREATE ORDER
 export const createOrderService = async (data: Partial<IOrder>) => {
   await validateProducts(data.items || []);
@@ -49,8 +50,6 @@ export const createOrderService = async (data: Partial<IOrder>) => {
   return await orderRepo.createOrderInDb(data);
 };
 
-
-
 // ✅ GET SINGLE ORDER
 export const getOrderService = async (id: string) => {
   const order = await orderRepo.findOrderById(id);
@@ -61,8 +60,6 @@ export const getOrderService = async (id: string) => {
 
   return order;
 };
-
-
 
 // ✅ LIST ORDERS (FILTER + PAGINATION)
 export const listOrdersService = async (query: any) => {
@@ -139,23 +136,17 @@ export const listOrdersService = async (query: any) => {
     }
   }
 
-  const { data, total } = await orderRepo.findAllOrders(
-    filter,
-    skip,
-    limit
-  );
+  const { data, total } = await orderRepo.findAllOrders(filter, skip, limit);
 
   const pagination = formatPaginationData(total, page, limit);
 
   return { data, pagination };
 };
 
-
-
 // ✅ UPDATE ORDER
 export const updateOrderService = async (
   id: string,
-  updateData: Partial<IOrder>
+  updateData: Partial<IOrder>,
 ) => {
   if (updateData.items) {
     await validateProducts(updateData.items);
@@ -174,8 +165,6 @@ export const updateOrderService = async (
   return order;
 };
 
-
-
 // ✅ DELETE ORDER (SOFT DELETE)
 export const deleteOrderService = async (id: string) => {
   const order = await orderRepo.softDeleteOrderInDb(id);
@@ -185,4 +174,128 @@ export const deleteOrderService = async (id: string) => {
   }
 
   return order;
+};
+
+// 🔹 Helper for Reorder: Validate products and get latest pricing
+const getValidatedProductsWithLatestPricing = async (
+  items: IOrder["items"],
+) => {
+
+  if (!items?.length) {
+    throw createApiError(400, "Order must have at least one item");
+  }
+
+  const validatedItems = await Promise.all(
+    items.map(async (item) => {
+
+      // 🔥 Fetch latest product
+      const product = await productRepo.findProductById(
+        item.product.toString(),
+      );
+
+      if (!product) {
+        throw createApiError(
+          400,
+          `Product not found: ${item.product}`,
+        );
+      }
+
+      // 🔥 Optional validations
+      if (product.isDeleted) {
+        throw createApiError(400, `Product is deleted: ${item.product}`);
+      }
+      if (product.stock < item.quantity) {
+        throw createApiError(400, `Insufficient stock for product: ${item.product}`);
+      }
+
+      // 🔥 Latest price
+      const latestPrice = Number(product.price);
+
+      return {
+        product: product._id,
+
+        // 🔥 Snapshot
+        name: product.name,
+
+        quantity: item.quantity,
+
+        // 🔥 Latest price
+        price: latestPrice,
+
+        // 🔥 Dynamic total
+        total: latestPrice * item.quantity,
+      };
+    }),
+  );
+
+  return validatedItems;
+};
+
+// ✅ REORDER
+export const reorderService = async (
+  id: string,
+  paymentMethod?: "CASH" | "UPI" | "CARD",
+  paymentStatus?: "PENDING" | "PAID",
+) => {
+
+  // 🔥 Step 1: Fetch Existing Order
+  const existingOrder = await orderRepo.findOrderById(id);
+
+  if (!existingOrder) {
+    throw createApiError(404, "Order not found");
+  }
+
+  // 🔥 Step 2: Validate + Get Latest Pricing
+  const validatedItems =
+    await getValidatedProductsWithLatestPricing(
+      existingOrder.items,
+    );
+
+  // 🔥 Step 3: Validate Festival
+  if (existingOrder.festival) {
+    await validateFestival(
+      existingOrder.festival as Types.ObjectId,
+    );
+  }
+
+  // 🔥 Step 4: Recalculate Totals
+  const subTotal = validatedItems.reduce(
+    (sum, item) => sum + item.total,
+    0,
+  );
+
+  const discount = existingOrder.discount || 0;
+
+  const totalAmount = subTotal - discount;
+
+  // 🔥 Step 5: Create Fresh Payload
+  const newOrderPayload: Partial<IOrder> = {
+    customer: existingOrder.customer,
+
+    customerSnapshot: {
+      name: existingOrder.customerSnapshot?.name,
+      phone: existingOrder.customerSnapshot.phone,
+    },
+
+    items: validatedItems,
+
+    festival: existingOrder.festival,
+
+    discount,
+
+    subTotal,
+
+    totalAmount,
+
+    paymentMethod:
+      paymentMethod || existingOrder.paymentMethod,
+
+    // 🔥 Backend controlled
+    paymentStatus: paymentStatus || "PENDING",
+  };
+
+  // 🔥 Step 6: Create Order
+  return await orderRepo.createOrderInDb(
+    newOrderPayload,
+  );
 };

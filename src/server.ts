@@ -14,7 +14,9 @@ import authRoutes from "./routes/authRoutes";
 import categoryRoutes from "./routes/category.routes";
 import companyRoutes from "./routes/company.routes";
 import festivalRoutes from "./routes/festival.routes";
+import orderRoutes from "./routes/order.routes";
 import productRoutes from "./routes/product.routes";
+import sectionRoutes from "./routes/section.routes";
 import userRoutes from "./routes/user.routes";
 
 const app = express();
@@ -38,6 +40,8 @@ app.use('/api/products', productRoutes);
 app.use("/api/festivals", festivalRoutes);
 app.use("/api/companies", companyRoutes);
 app.use('/api/users', userRoutes);
+app.use("/api/sections", sectionRoutes); 
+app.use("/api/orders", orderRoutes); // Importing order routes here to avoid circular dependency with order.model.ts
 
 // Global 404 handler
 app.use((req: Request, res: Response, next: NextFunction) => {

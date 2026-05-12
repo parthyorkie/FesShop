@@ -13,6 +13,9 @@
 @productId = REPLACE_WITH_PRODUCT_ID
 @userId = REPLACE_WITH_USER_ID
 @companyId = REPLACE_WITH_COMPANY_ID
+@orderId = REPLACE_WITH_ORDER_ID
+@customerId = REPLACE_WITH_CUSTOMER_ID
+@festivalId = REPLACE_WITH_FESTIVAL_ID
 
 ### ====================================================
 ### 🔐 AUTH APIs
@@ -177,8 +180,386 @@ Content-Type: application/json
 
 
 ### ====================================================
-### 👥 USER MANAGEMENT APIs [ADMIN ONLY]
+### 🛒 ORDER APIs
 ### ====================================================
+
+### 1. Create Order [ADMIN]
+# Creates a new order with customer and items details
+# Required: customerSnapshot (name, phone), items array (product, name, quantity, price, total)
+# Optional: customer (customer ID), discount, festival, paymentMethod, paymentStatus
+# Response: 201 Created with order object
+POST {{baseUrl}}/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customer": "{{customerId}}",
+  "customerSnapshot": {
+    "name": "John Doe",
+    "phone": "9876543210"
+  },
+  "items": [
+    {
+      "product": "{{productId}}",
+      "name": "Samsung Galaxy S24",
+      "quantity": 2,
+      "price": 999.99,
+      "total": 1999.98
+    },
+    {
+      "product": "{{productId}}",
+      "name": "Phone Case",
+      "quantity": 1,
+      "price": 29.99,
+      "total": 29.99
+    }
+  ],
+  "subTotal": 2029.97,
+  "discount": 50.00,
+  "totalAmount": 1979.97,
+  "festival": "{{festivalId}}",
+  "paymentMethod": "CASH",
+  "paymentStatus": "PENDING"
+}
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 201 Created
+# {
+#   "statusCode": 201,
+#   "data": {
+#     "_id": "507f1f77bcf86cd799439011",
+#     "customer": "507f1f77bcf86cd799439012",
+#     "customerSnapshot": {
+#       "name": "John Doe",
+#       "phone": "9876543210"
+#     },
+#     "items": [
+#       {
+#         "product": "507f1f77bcf86cd799439013",
+#         "name": "Samsung Galaxy S24",
+#         "quantity": 2,
+#         "price": 999.99,
+#         "total": 1999.98
+#       },
+#       {
+#         "product": "507f1f77bcf86cd799439013",
+#         "name": "Phone Case",
+#         "quantity": 1,
+#         "price": 29.99,
+#         "total": 29.99
+#       }
+#     ],
+#     "subTotal": 2029.97,
+#     "discount": 50.00,
+#     "totalAmount": 1979.97,
+#     "festival": "507f1f77bcf86cd799439014",
+#     "paymentMethod": "CASH",
+#     "paymentStatus": "PENDING",
+#     "isDeleted": false,
+#     "createdAt": "2024-05-11T10:30:00.000Z",
+#     "updatedAt": "2024-05-11T10:30:00.000Z",
+#     "__v": 0
+#   },
+#   "message": "Order created successfully"
+# }
+
+### ----------------------------------------------------
+### 2. List Orders [PUBLIC/USER]
+# Supports optional queries: ?page=1&limit=10&search=john&paymentMethod=CASH&paymentStatus=PAID&customer=ID&festival=ID&phone=PHONE&minAmount=100&maxAmount=5000&startDate=2024-01-01&endDate=2024-12-31
+# Response: 200 OK with paginated orders array and pagination metadata
+GET {{baseUrl}}/orders?page=1&limit=10
+Content-Type: application/json
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 200 OK
+# {
+#   "statusCode": 200,
+#   "data": [
+#     {
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 200 OK
+# {
+#   "statusCode": 200,
+#   "data": {
+# Response: 200 OK with updated order object
+PUT {{baseUrl}}/orders/{{orderId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerSnapshot": {
+    "name": "John Doe Updated",
+    "phone": "9876543210"
+  },
+  "discount": 75.00,
+  "paymentStatus": "PAID",
+  "paymentMethod": "UPI"
+}
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 200 OK
+# {
+#   "statusCode": 200,
+#   "data": {
+#     "_id": "507f1f77bcf86cd799439011",
+#     "customer": "507f1f77bcf86cd799439012",
+#     "customerSnapshot": {
+#       "name": "John Doe Updated",
+#       "phone": "9876543210"
+#     },
+#     "items": [
+#       {
+#         "product": "507f1f77bcf86cd799439013",
+#         "name": "Samsung Galaxy S24",
+#         "quantity": 2,
+#         "price": 999.99,
+#         "total": 1999.98
+#       },
+#       {
+#         "product": "507f1f77bcf86cd799439013",
+#         "name": "Phone Case",
+#         "quantity": 1,
+#         "price": 29.99,
+#         "total": 29.99
+#       }
+#     ],
+#     "subTotal": 2029.97,
+#     "discount": 75.00,
+#     "totalAmount": 1954.97,
+#     "festival": "507f1f77bcf86cd799439014",
+#     "paymentMethod": "UPI",
+#     "paymentStatus": "PAID",
+#     "isDeleted": false,
+#     "createdAt": "2024-05-11T10:30:00.000Z",
+#     "updatedAt": "2024-05-11T11:45:00.000Z",
+#     "__v": 0
+#   },
+#   "message": "Order updated successfully"
+# #         "total": 1999.98
+#       },
+#       {
+#         "product": "507f1f77bcf86cd799439013",
+#         "name": "Phone Case",
+#         "quantity": 1,
+#         "price": 29.99,
+# Response: 200 OK with success message
+DELETE {{baseUrl}}/orders/{{orderId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 200 OK
+# {
+#   "statusCode": 200,
+#   "data": null,
+#   "message": "Order deleted successfully"
+# }
+#     "subTotal": 2029.97,
+#     "discount": 50.00,
+#     "totalAmount": 1979.97,
+#     "festival": "507f1f77bcf86cd799439014",
+#     "paymentMethod": "CASH",
+#     "paymentStatus": "PENDING",
+#     "isDeleted": false,
+#     "createdAt": "2024-05-11T10:30:00.000Z",
+#     "updatedAt": "2024-05-11T10:30:00.000Z",
+#     "__v": 0
+#   },
+#   "message": "Order retrieved successfully"
+# }
+#       "_id": "507f1f77bcf86cd799439011",
+#       "customer": "507f1f77bcf86cd799439012",
+#       "customerSnapshot": {
+#         "name": "John Doe",
+#         "phone": "9876543210"
+#       },
+#       "items": [
+#         {
+#           "product": "507f1f77bcf86cd799439013",
+#           "name": "Samsung Galaxy S24",
+#           "quantity": 2,
+#           "price": 999.99,
+#           "total": 1999.98
+#         }
+#       ],
+#       "subTotal": 1999.98,
+#       "discount": 50.00,
+#       "totalAmount": 1949.98,
+#       "festival": "507f1f77bcf86cd799439014",
+#       "paymentMethod": "CASH",
+#       "paymentStatus": "PAID",
+#       "isDeleted": false,
+#       "createdAt": "2024-05-11T10:30:00.000Z",
+#       "updatedAt": "2024-05-11T10:30:00.000Z"
+#     }
+# Note: Products are re-validated and prices are updated to latest
+# Response: 201 Created with new order object
+POST {{baseUrl}}/orders/reorder/{{orderId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "CARD",
+  "paymentStatus": "PENDING"
+}
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 201 Created
+# {
+#   "statusCode": 201,
+#   "data": {
+#     "_id": "507f1f77bcf86cd799439022",
+#     "customer": "507f1f77bcf86cd799439012",
+#     "customerSnapshot": {
+#       "name": "John Doe",
+#       "phone": "9876543210"
+#     },
+#     "items": [
+#       {
+#         "product": "507f1f77bcf86cd799439013",
+#         "name": "Samsung Galaxy S24",
+#         "quantity": 2,
+#         "price": 1049.99,
+#         "total": 2099.98
+#       },
+#       {
+#         "product": "507f1f77bcf86cd799439013",
+#         "name": "Phone Case",
+#         "quantity": 1,
+#         "price": 34.99,
+#         "total": 34.99
+#       }
+#     ],
+#     "subTotal": 2134.97,
+#     "discount": 50.00,
+#     "totalAmount": 2084.97,
+#     "festival": "507f1f77bcf86cd799439014",
+#     "paymentMethod": "CARD",
+#     "paymentStatus": "PENDING",
+#     "isDeleted": false,
+#     "createdAt": "2024-05-11T12:00:00.000Z",
+#     "updatedAt": "2024-05-11T12:00:00.000Z",
+#     "__v": 0
+#   },
+#   "message": "Order reordered successfully"
+# #     "hasNextPage": true,
+#     "hasPrevPage": false
+#   }
+# }
+
+### ----------------------------------------------------
+### 3. Get Single Order [PUBLIC/USER]
+# Requires: valid order ID (24-char hex)
+# Response: 200 OK with complete order object or 404 if not found
+GET {{baseUrl}}/orders/{{orderId}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 4. Update Order [ADMIN]
+# Requires: valid order ID, optional fields to update
+# Can update: customer, customerSnapshot, items, discount, festival, paymentMethod, paymentStatus
+# At least one field is required
+PUT {{baseUrl}}/orders/{{orderId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerSnapshot": {
+    "name": "John Doe Updated",
+    "phone": "9876543210"
+  },
+  "discount": 75.00,
+  "paymentStatus": "PAID",
+  "paymentMethod": "UPI"
+}
+
+### ----------------------------------------------------
+### 5. Delete Order - Soft Delete [ADMIN]
+# Requires: valid order ID
+# Order data is preserved but marked as deleted
+DELETE {{baseUrl}}/orders/{{orderId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 6. Reorder [ADMIN]
+# Creates a new order from an existing order
+# Requires: valid order ID from previous order
+# Optional: paymentMethod, paymentStatus (can be different from original)
+POST {{baseUrl}}/orders/reorder/{{orderId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "paymentMethod": "CARD",
+  "paymentStatus": "PENDING"
+}
+
+
+
+### 1. Create Section [ADMIN]
+# Type must be one of: "banner", "grid", "horizontal"
+# DataSource is required (e.g., static or dynamic)
+# Discriminator-specific fields:
+# - banner: items [{ image, cta: { type: "product"|"category", value: ID } }]
+# - grid: columns, items [{ title, image, cta: { type, value } }]
+# - horizontal: items [{ title, image, cta: { type, value } }]
+POST {{baseUrl}}/sections
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "type": "banner",
+  "title": "Summer Sale Banner",
+  "displayOrder": 1,
+  "status": "published",
+  "isActive": true,
+  "dataSource": {
+    "type": "static"
+  },
+  "items": [
+    {
+      "image": "https://example.com/banner1.jpg",
+      "cta": {
+        "type": "category",
+        "value": "{{categoryId}}"
+      }
+    }
+  ]
+}
+
+### ----------------------------------------------------
+### 2. List Sections [PUBLIC/USER]
+# Supports optional queries for filtering/pagination
+GET {{baseUrl}}/sections?page=1&limit=10
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 3. Get Single Section [PUBLIC/USER]
+GET {{baseUrl}}/sections/{{sectionId}}
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 4. Update Section [ADMIN]
+PUT {{baseUrl}}/sections/{{sectionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Updated Summer Banner",
+  "status": "published",
+  "displayOrder": 2
+}
+
+### ----------------------------------------------------
+### 5. Delete Section [ADMIN]
+DELETE {{baseUrl}}/sections/{{sectionId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### ====================================================
+### 👥 USER MANAGEMENT APIs [ADMIN ONLY]
 
 ### 1. Create User [ADMIN]
 # Creates a new user with hashed password
@@ -238,3 +619,4 @@ Content-Type: application/json
   "oldPassword": "CurrentPassword123",
   "newPassword": "NewPassword456"
 }
+

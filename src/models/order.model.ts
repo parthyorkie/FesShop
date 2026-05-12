@@ -97,7 +97,7 @@ const OrderSchema = new Schema<IOrder>(
 
     subTotal: {
       type: Number,
-      required: true,
+      // required: true,
       min: 0,
     },
 
@@ -109,7 +109,7 @@ const OrderSchema = new Schema<IOrder>(
 
     totalAmount: {
       type: Number,
-      required: true,
+      // required: true,
       min: 0,
     },
 

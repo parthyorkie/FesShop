@@ -26,7 +26,7 @@ export const findOrderById = async (
     _id: toObjectId(id),
     isDeleted: false,
   })
-    .populate(ORDER_POPULATE)
+    // .populate(ORDER_POPULATE)
     .lean();
 };
 
@@ -58,17 +58,36 @@ export const findAllOrders = async (
 // ✅ Update Order
 export const updateOrderInDb = async (
   id: string,
-  data: mongoose.UpdateQuery<IOrder>
+  updateData: mongoose.UpdateQuery<IOrder>
 ): Promise<IOrder | null> => {
+  
+  // 🔥 Step 1: Manually calculate totals
+  // We use "as any" or a specific interface for the items to satisfy the reduce types
+  if (updateData.items || updateData.discount !== undefined) {
+    const items = (updateData.items as any[]) || [];
+    
+    const subTotal = items.reduce(
+      (sum: number, item: any) => sum + (Number(item.total) || 0),
+      0
+    );
+
+    updateData.subTotal = subTotal;
+    updateData.totalAmount = subTotal - (Number(updateData.discount) || 0);
+  }
+
+  // 🔥 Step 2: Database Operation
   return await Order.findOneAndUpdate(
     { _id: toObjectId(id), isDeleted: false },
-    data,
+    { $set: updateData }, 
     {
       new: true,
       runValidators: true,
     }
   )
-    .populate(ORDER_POPULATE)
+    .populate([
+      { path: "festival", select: "name" },
+      { path: "items.product", select: "name price" }
+    ])
     .lean();
 };
 
