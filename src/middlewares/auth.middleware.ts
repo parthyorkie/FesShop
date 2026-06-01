@@ -1,10 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
 import { createApiError } from '../utils/ApiError';
 import { asyncHandler } from '../utils/asyncHandler';
+import { verifyAccessToken } from '../utils/jwt';
 
 interface JwtPayload {
-  id: string;
+  userId: string;
+  id?: string; // Backwards compatibility if needed
   role: 'ADMIN' | 'USER';
 }
 
@@ -29,15 +30,21 @@ export const authenticate = asyncHandler(
     }
     
     try {
-      const decoded = jwt.verify(
-        token, 
-        process.env.JWT_ACCESS_SECRET!
-      ) as JwtPayload;
+      const decoded = verifyAccessToken(token) as JwtPayload;
+      
+      // Map userId to id for backwards compatibility if needed by other components
+      if (decoded.userId && !decoded.id) {
+        decoded.id = decoded.userId;
+      }
       
       req.user = decoded;
       next();
-    } catch (error) {
-      throw createApiError(401, 'Not authorized, token failed');
+    } catch (error: any) {
+      console.error('JWT verification failure:', error.message);
+      if (error.name === 'TokenExpiredError') {
+        throw createApiError(401, 'Not authorized, token expired');
+      }
+      throw createApiError(401, 'Not authorized, invalid token');
     }
   }
 );

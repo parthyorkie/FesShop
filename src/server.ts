@@ -20,7 +20,9 @@ import sectionRoutes from "./routes/section.routes";
 import userRoutes from "./routes/user.routes";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// const PORT = process.env.PORT || 3000;
+
+const PORT = Number(process.env.PORT) || 3000;
 
 // Security Middlewares
 app.use(helmet());
@@ -51,9 +53,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Global Error Handler
 app.use(errorHandler);
 
+console.log('Starting server...');
 // Connect DB and Start Server
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0',() => {
     console.log(`Server listening on http://localhost:${PORT}`);
   });
 });

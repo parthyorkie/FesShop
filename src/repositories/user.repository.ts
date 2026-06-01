@@ -71,3 +71,8 @@ export const softDeleteUserInDb = async (id: string): Promise<IUser | null> => {
 export const countUsersByRole = async (role: string): Promise<number> => {
   return await User.countDocuments({ role, isDeleted: false });
 };
+
+// Aliases to match required interface
+export const createUser = createUserInDb;
+export const findById = findUserById;
+export const findByEmail = findUserByEmail;
