@@ -620,3 +620,237 @@ Content-Type: application/json
   "newPassword": "NewPassword456"
 }
 
+
+### ====================================================
+### 📹 WEBRTC VIDEO CALL - SOCKET.IO EVENTS
+### ====================================================
+### 
+### NOTE: These are Socket.IO events, NOT REST APIs.
+### Use a Socket.IO client to connect and emit/listen to events.
+### 
+### CONNECTION URL: ws://localhost:3000
+### AUTHENTICATION: Pass JWT token in handshake
+###
+### ────────────────────────────────────────────────────
+### 🔌 CONNECTION EXAMPLE (JavaScript/TypeScript)
+### ────────────────────────────────────────────────────
+###
+### import { io } from 'socket.io-client';
+###
+### const socket = io('http://localhost:3000', {
+###   auth: { token: 'YOUR_JWT_TOKEN' },
+###   transports: ['websocket'],
+### });
+###
+### socket.on('connect', () => console.log('Connected:', socket.id));
+### socket.on('connect_error', (err) => console.error('Auth failed:', err.message));
+###
+### ────────────────────────────────────────────────────
+### 📤 CLIENT → SERVER EVENTS
+### ────────────────────────────────────────────────────
+###
+### 1. register-user
+###    Auto-called on connection. Registers user for calls.
+###    Payload: { userId: string }
+###    Response (via callback): { success: boolean, message?: string }
+###
+### 2. call-user
+###    Initiate a video call to another user.
+###    Payload: {
+###      callerId: string,      // Your user ID (must match authenticated user)
+###      receiverId: string,    // Target user's ID
+###      offer: {               // WebRTC SDP offer
+###        type: "offer",
+###        sdp: string
+###      }
+###    }
+###    Response (via callback): { 
+###      success: boolean, 
+###      message?: string, 
+###      callRecordId?: string  // ID of created call record
+###    }
+###    If receiver offline: Push notification sent via OneSignal
+###
+### 3. answer-call
+###    Answer an incoming call.
+###    Payload: {
+###      callerId: string,      // ID of the caller
+###      answer: {              // WebRTC SDP answer
+###        type: "answer",
+###        sdp: string
+###      }
+###    }
+###    Response (via callback): { success: boolean, message?: string }
+###
+### 4. ice-candidate
+###    Send ICE candidate to peer (no callback).
+###    Payload: {
+###      receiverId: string,    // ID of the peer
+###      candidate: {           // WebRTC ICE candidate
+###        candidate?: string,
+###        sdpMid?: string,
+###        sdpMLineIndex?: number
+###      }
+###    }
+###
+### 5. reject-call
+###    Reject an incoming call.
+###    Payload: {
+###      receiverId: string     // ID of the caller (who you're rejecting)
+###    }
+###    Response (via callback): { success: boolean, message?: string }
+###
+### 6. end-call
+###    End an active call.
+###    Payload: {
+###      receiverId: string     // ID of the other participant
+###    }
+###    Response (via callback): { success: boolean, message?: string }
+###
+### ────────────────────────────────────────────────────
+### 📥 SERVER → CLIENT EVENTS
+### ────────────────────────────────────────────────────
+###
+### 1. registered
+###    Confirmation of successful registration.
+###    Payload: { userId: string, message: string }
+###
+### 2. incoming-call
+###    Received when someone is calling you.
+###    Payload: {
+###      callerId: string,
+###      callerName: string,
+###      offer: { type: "offer", sdp: string },
+###      callRecordId?: string
+###    }
+###
+### 3. call-answered
+###    Received when callee answers your call.
+###    Payload: {
+###      receiverId: string,
+###      receiverName: string,
+###      answer: { type: "answer", sdp: string }
+###    }
+###
+### 4. ice-candidate
+###    Received ICE candidate from peer.
+###    Payload: {
+###      senderId: string,
+###      candidate: { candidate?, sdpMid?, sdpMLineIndex? }
+###    }
+###
+### 5. call-rejected
+###    Received when callee rejects your call.
+###    Payload: {
+###      receiverId: string,
+###      reason?: string
+###    }
+###
+### 6. call-ended
+###    Received when other participant ends the call.
+###    Payload: {
+###      endedBy: string,
+###      reason?: string
+###    }
+###
+### 7. user-online
+###    Broadcast when a user connects.
+###    Payload: { userId: string, userName: string }
+###
+### 8. user-offline
+###    Broadcast when a user disconnects.
+###    Payload: { userId: string, userName: string }
+###
+### 9. error
+###    Received on socket errors.
+###    Payload: {
+###      code: "UNAUTHORIZED" | "INVALID_PAYLOAD" | "USER_NOT_FOUND" | 
+###            "USER_OFFLINE" | "CALL_FAILED" | "INTERNAL_ERROR",
+###      message: string,
+###      details?: object
+###    }
+###
+### ────────────────────────────────────────────────────
+### 🔄 COMPLETE CALL FLOW EXAMPLE
+### ────────────────────────────────────────────────────
+###
+### CALLER (User A):
+### 1. Connect with JWT → auto-registered
+### 2. Create RTCPeerConnection, add local stream
+### 3. Create offer: const offer = await pc.createOffer()
+### 4. Set local description: await pc.setLocalDescription(offer)
+### 5. Emit: socket.emit('call-user', { callerId: myId, receiverId: targetId, offer })
+### 6. Listen: socket.on('call-answered', async ({ answer }) => {
+###      await pc.setRemoteDescription(answer);
+###    });
+### 7. Exchange ICE: pc.onicecandidate = (e) => {
+###      if (e.candidate) socket.emit('ice-candidate', { receiverId: targetId, candidate: e.candidate });
+###    };
+### 8. Receive ICE: socket.on('ice-candidate', async ({ candidate }) => {
+###      await pc.addIceCandidate(candidate);
+###    });
+###
+### CALLEE (User B):
+### 1. Connect with JWT → auto-registered
+### 2. Listen: socket.on('incoming-call', async ({ callerId, callerName, offer }) => {
+###      // Show UI: "Incoming call from {callerName}"
+###      const pc = new RTCPeerConnection(config);
+###      await pc.setRemoteDescription(offer);
+###      const answer = await pc.createAnswer();
+###      await pc.setLocalDescription(answer);
+###      socket.emit('answer-call', { callerId, answer });
+###    });
+### 3. Exchange ICE candidates (same as caller)
+###
+### ────────────────────────────────────────────────────
+### 📊 CALL HISTORY (Database)
+### ────────────────────────────────────────────────────
+###
+### Call records are automatically persisted in MongoDB:
+### - Status: MISSED | REJECTED | ANSWERED | COMPLETED
+### - Duration calculated automatically for completed calls
+### - Accessible via videoCallService (not exposed as REST API by default)
+###
+### Schema:
+### {
+###   callerId: ObjectId (ref: User),
+###   receiverId: ObjectId (ref: User),
+###   status: string,
+###   startedAt: Date,
+###   answeredAt?: Date,
+###   endedAt?: Date,
+###   duration?: number (seconds),
+###   createdAt: Date,
+###   updatedAt: Date
+### }
+###
+### ────────────────────────────────────────────────────
+### 🔔 PUSH NOTIFICATIONS (OneSignal)
+### ────────────────────────────────────────────────────
+###
+### When receiver is OFFLINE:
+### - Incoming call notification sent via OneSignal
+### - Title: "Incoming Call"
+### - Body: "{CallerName} is calling you"
+### - Data: { type: "video_call", callerId, callerName, callRecordId }
+###
+### Missed call notification:
+### - Title: "Missed Call"
+### - Body: "You missed a call from {CallerName}"
+###
+### Required ENV vars:
+### ONESIGNAL_APP_ID=your-app-id
+### ONESIGNAL_REST_API_KEY=your-api-key
+###
+### ────────────────────────────────────────────────────
+### ⚙️ CONFIGURATION
+### ────────────────────────────────────────────────────
+###
+### Environment Variables:
+### - ONESIGNAL_APP_ID: OneSignal App ID
+### - ONESIGNAL_REST_API_KEY: OneSignal REST API Key
+### - REDIS_URL: (Optional) For multi-server scaling
+### - CORS_ORIGINS: Comma-separated allowed origins
+###
+### Call Timeout: 30 seconds (unanswered calls marked as MISSED)
+### Transport: WebSocket preferred, polling fallback

@@ -54,7 +54,7 @@ export const updateUserInDb = async (
   return await User.findOneAndUpdate(
     { _id: toObjectId(id), isDeleted: false },
     { $set: data },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   ).select('-password -otp -otpExpiry').lean();
 };
 
@@ -63,7 +63,7 @@ export const softDeleteUserInDb = async (id: string): Promise<IUser | null> => {
   return await User.findOneAndUpdate(
     { _id: toObjectId(id), isDeleted: false },
     { isDeleted: true },
-    { new: true }
+    { returnDocument: 'after' }
   ).lean();
 };
 

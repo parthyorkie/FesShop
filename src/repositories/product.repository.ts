@@ -33,7 +33,7 @@
 //   return await Product.findOneAndUpdate(
 //     { _id: id, isDeleted: false },
 //     data,
-//     { new: true, runValidators: true }
+//     { returnDocument: 'after', runValidators: true }
 //   ).lean();
 // };
 
@@ -41,7 +41,7 @@
 //   return await Product.findOneAndUpdate(
 //     { _id: id, isDeleted: false },
 //     { isDeleted: true },
-//     { new: true }
+//     { returnDocument: 'after' }
 //   ).lean();
 // };
 
@@ -113,7 +113,7 @@ export const updateProductInDb = async (
     { _id: toObjectId(id), isDeleted: false },
     data,
     {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }
   )
@@ -132,6 +132,6 @@ export const softDeleteProductInDb = async (
   return await Product.findOneAndUpdate(
     { _id: toObjectId(id), isDeleted: false },
     { isDeleted: true },
-    { new: true }
+    { returnDocument: 'after' }
   ).lean();
 };

@@ -3,11 +3,14 @@ dotenv.config();
 
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
+import { createServer } from "http";
 import helmet from "helmet";
 import { connectDB } from "./config/db";
 import { errorHandler } from "./middlewares/error.middleware";
 import { apiLimiter } from "./middlewares/rateLimiter.middleware";
 import { createApiError } from "./utils/ApiError";
+import { initializeVideoCallSocket } from "./socket/videoCall.socket";
+import { logger } from "./utils/logger";
 
 // Route imports
 import authRoutes from "./routes/authRoutes";
@@ -18,11 +21,13 @@ import orderRoutes from "./routes/order.routes";
 import productRoutes from "./routes/product.routes";
 import sectionRoutes from "./routes/section.routes";
 import userRoutes from "./routes/user.routes";
+import console from "console";
 
 const app = express();
-// const PORT = process.env.PORT || 3000;
+const httpServer = createServer(app);
 
 const PORT = Number(process.env.PORT) || 3000;
+const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',') || '*';
 
 // Security Middlewares
 app.use(helmet());
@@ -53,10 +58,17 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Global Error Handler
 app.use(errorHandler);
 
-console.log('Starting server...');
+logger.info('Starting server...');
+
 // Connect DB and Start Server
 connectDB().then(() => {
-  app.listen(PORT, '0.0.0.0',() => {
-    console.log(`Server listening on http://localhost:${PORT}`);
+  // Initialize Socket.IO for WebRTC signaling
+  const io = initializeVideoCallSocket(httpServer, CORS_ORIGINS);
+  logger.info('[Socket.IO] Video call signaling initialized');
+
+  // Start HTTP server (includes both Express and Socket.IO)
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    logger.info(`Server listening on http://localhost:${PORT}`);
+    logger.info(`[Socket.IO] WebSocket server ready`);
   });
 });

@@ -57,7 +57,7 @@ export const updateSection = async (
   update: UpdateQuery<SectionDocument>
 ): Promise<SectionDocument | null> => {
   return SectionModel.findByIdAndUpdate(id, update, {
-    new: true,
+    returnDocument: 'after',
   }).lean();
 };
 

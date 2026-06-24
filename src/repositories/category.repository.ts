@@ -34,7 +34,7 @@ export const updateCategoryInDb = async (id: string, data: mongoose.UpdateQuery<
   return await Category.findOneAndUpdate(
     { _id: id, isDeleted: false },
     data,
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   ).lean();
 };
 
@@ -42,7 +42,7 @@ export const softDeleteCategoryInDb = async (id: string): Promise<ICategory | nu
   return await Category.findOneAndUpdate(
     { _id: id, isDeleted: false },
     { isDeleted: true },
-    { new: true }
+    { returnDocument: 'after' }
   ).lean();
 };
 // ✅ Count Categories by IDs (USED IN VALIDATION)

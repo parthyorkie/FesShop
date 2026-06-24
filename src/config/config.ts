@@ -12,6 +12,12 @@ export const config = {
   CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET!,
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,
 
+  // OneSignal Push Notifications
+  ONESIGNAL_APP_ID: process.env.ONESIGNAL_APP_ID || '',
+  ONESIGNAL_REST_API_KEY: process.env.ONESIGNAL_REST_API_KEY || '',
+
+  // Redis (optional - for Socket.IO adapter in production)
+  REDIS_URL: process.env.REDIS_URL || '',
 };
 
 export default config;

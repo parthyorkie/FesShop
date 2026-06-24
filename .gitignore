@@ -2,3 +2,5 @@ node_modules
 .env
 npm-debug.log*
 dist
+docs/PROMPT_HISTORY.md
+docs/COMPLETE_AI_PROMPT.md

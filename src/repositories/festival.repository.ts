@@ -45,7 +45,7 @@ export const updateFestivalInDb = async (
   return await Festival.findOneAndUpdate(
     { _id: toObjectId(id), isDeleted: false },
     data,
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   ).lean();
 };
 
@@ -55,7 +55,7 @@ export const softDeleteFestivalInDb = async (
   return await Festival.findOneAndUpdate(
     { _id: toObjectId(id), isDeleted: false },
     { isDeleted: true },
-    { new: true }
+    { returnDocument: 'after' }
   ).lean();
 };
 

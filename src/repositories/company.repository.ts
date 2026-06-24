@@ -57,7 +57,7 @@ export const updateCompanyInDb = async (
   return await Company.findOneAndUpdate(
     { _id: id, isDeleted: false },
     updateData,
-    { new: true }
+    { returnDocument: 'after' }
   );
 };
 
@@ -69,6 +69,6 @@ export const softDeleteCompanyInDb = async (
   return await Company.findOneAndUpdate(
     { _id: id, isDeleted: false },
     { isDeleted: true },
-    { new: true }
+    { returnDocument: 'after' }
   );
 };

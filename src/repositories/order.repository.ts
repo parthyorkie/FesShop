@@ -80,7 +80,7 @@ export const updateOrderInDb = async (
     { _id: toObjectId(id), isDeleted: false },
     { $set: updateData }, 
     {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }
   )
@@ -98,6 +98,6 @@ export const softDeleteOrderInDb = async (
   return await Order.findOneAndUpdate(
     { _id: toObjectId(id), isDeleted: false },
     { isDeleted: true },
-    { new: true }
+    { returnDocument: 'after' }
   ).lean();
 };
