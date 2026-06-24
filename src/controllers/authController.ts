@@ -3,6 +3,9 @@ import { Request, Response } from 'express';
 import User from '../models/User';
 import { sendResetEmail, sendSuccessEmail } from '../services/emailService';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
+import { trackEvent } from '../services/socialProof.service';
+import { SocialProofEventType } from '../models/socialProofEvent.model';
+import { logger } from '../utils/logger';
 
 export const register = async (req: Request, res: Response) => {
   const { email, password, name, role } = req.body;
@@ -17,6 +20,28 @@ export const register = async (req: Request, res: Response) => {
   await sendSuccessEmail(email);
 
   console.log("user registered")
+
+  // ✅ SOCIAL PROOF: Trigger SIGNUP event (non-blocking — must not fail registration)
+  try {
+    logger.info(
+      `[SocialProof] Signup social proof triggered - userId: ${user._id}, email: ${user.email}`
+    );
+
+    await trackEvent({
+      type: SocialProofEventType.SIGNUP,
+      userId: user._id.toString(),
+      metadata: {
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (socialProofErr: any) {
+    // ✅ ERROR HANDLING: Social proof failure must NOT fail user registration
+    logger.error(
+      `[SocialProof] Social proof tracking failed after signup - userId: ${user._id}, email: ${user.email} - Error: ${socialProofErr.message}`
+    );
+  }
+
   res.json({ message: 'Registered', user: { id: user._id, email: user.email, name: user.name } });
 };
 

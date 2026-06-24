@@ -7,6 +7,39 @@ Follow ALL rules defined in:
 
 ---
 
+## 📝 STEP 0 — Auto Prompt Logging (ALWAYS, NO REMINDER NEEDED)
+
+> ⚠️ This runs on **every single prompt**, automatically, without the user asking.
+
+**On EVERY turn, immediately log to `docs/PROMPT_HISTORY.md`:**
+
+1. Find or create today's date section: `### 📅 Month DD, YYYY`
+2. Append the next sequential prompt entry:
+
+```
+#### 🕐 Prompt #N — HH:MM IST
+\`\`\`
+Prompt:  [Full verbatim prompt text — never summarize, copy exactly]
+Context: [What feature/file was being worked on]
+Result:  [What was created or changed]
+Files:   [Comma-separated list of affected files]
+Status:  ✅ Completed / 🚧 In Progress / ❌ Failed
+Tags:    [#relevant #tags]
+\`\`\`
+```
+
+3. Update `*Last Updated: ...*` at the bottom of the file
+4. Add date to Table of Contents if it's a new day
+
+**Rules:**
+- Never skip, even for 1-word replies ("Continue", "Yes", "Fix it")
+- Always use the full verbatim prompt, never a paraphrase
+- N resets to 1 each new day
+
+---
+
+
+
 ## Strict Instructions:
 
 - Always follow clean architecture
