@@ -86,6 +86,26 @@ export const logDuplicateRegistration = (userId: string, oldSocketId: string, ne
 };
 
 // ============================================
+// Presence Events
+// ============================================
+
+export const logUserOnline = (userId: string): void => {
+  log('info', 'Presence', 'User Online', { userId });
+};
+
+export const logUserOffline = (userId: string): void => {
+  log('info', 'Presence', 'User Offline', { userId });
+};
+
+export const logOnlineUsersRequested = (socketId: string, userId: string): void => {
+  log('info', 'Presence', 'Online Users Requested', { socketId, userId });
+};
+
+export const logCurrentOnlineCount = (count: number): void => {
+  log('info', 'Presence', `Current Online Count: ${count}`, { count });
+};
+
+// ============================================
 // Call Events
 // ============================================
 

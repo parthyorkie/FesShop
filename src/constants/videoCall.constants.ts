@@ -18,6 +18,7 @@ export type CallStatus = typeof CALL_STATUS[keyof typeof CALL_STATUS];
 // Client to Server events
 export const CLIENT_EVENTS = {
   REGISTER_USER: 'register-user',
+  GET_ONLINE_USERS: 'get-online-users',
   CALL_USER: 'call-user',
   ANSWER_CALL: 'answer-call',
   ICE_CANDIDATE: 'ice-candidate',
@@ -34,6 +35,7 @@ export const SERVER_EVENTS = {
   CALL_ENDED: 'call-ended',
   USER_ONLINE: 'user-online',
   USER_OFFLINE: 'user-offline',
+  ONLINE_USERS: 'online-users',
   ERROR: 'error',
   REGISTERED: 'registered',
 } as const;

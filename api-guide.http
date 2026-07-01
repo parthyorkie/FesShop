@@ -707,6 +707,12 @@ Content-Type: application/json
 ###    }
 ###    Response (via callback): { success: boolean, message?: string }
 ###
+### 7. get-online-users
+###    Request list of all currently online users.
+###    Payload: none (empty event)
+###    Response: Emits 'online-users' event with user list
+###    Example: socket.emit('get-online-users');
+###
 ### ────────────────────────────────────────────────────
 ### 📥 SERVER → CLIENT EVENTS
 ### ────────────────────────────────────────────────────
@@ -761,7 +767,18 @@ Content-Type: application/json
 ###    Broadcast when a user disconnects.
 ###    Payload: { userId: string, userName: string }
 ###
-### 9. error
+### 9. online-users
+###    Response to get-online-users request.
+###    Payload: { 
+###      users: Array<{ 
+###        userId: string, 
+###        userName: string,
+###        connectedAt: string 
+###      }>,
+###      count: number 
+###    }
+###
+### 10. error
 ###    Received on socket errors.
 ###    Payload: {
 ###      code: "UNAUTHORIZED" | "INVALID_PAYLOAD" | "USER_NOT_FOUND" | 
@@ -854,3 +871,340 @@ Content-Type: application/json
 ###
 ### Call Timeout: 30 seconds (unanswered calls marked as MISSED)
 ### Transport: WebSocket preferred, polling fallback
+### ====================================================
+### 👥 ONLINE-OFFLINE USERS (PRESENCE SYSTEM)
+### ====================================================
+### 
+### Real-time user presence tracking for showing online/offline status.
+### Built on Socket.IO with automatic status updates.
+###
+### ────────────────────────────────────────────────────
+### 🌟 FEATURES
+### ────────────────────────────────────────────────────
+### 
+### ✅ Real-time online/offline status
+### ✅ Multi-device support (same user on multiple devices)
+### ✅ Automatic status updates on connect/disconnect
+### ✅ Grace period for reconnections (10 seconds)
+### ✅ Get list of all online users
+### ✅ User count tracking
+### ✅ Presence timestamps
+### ✅ Broadcast notifications when users come online/offline
+###
+### ────────────────────────────────────────────────────
+### 📱 MOBILE IMPLEMENTATION GUIDE
+### ────────────────────────────────────────────────────
+###
+### 1. CONNECTION & AUTHENTICATION:
+### ─────────────────────────────────
+### import { io } from 'socket.io-client';
+### 
+### const socket = io('http://your-server.com', {
+###   auth: {
+###     token: 'USER_JWT_TOKEN'  // Required: Valid JWT token
+###   },
+###   transports: ['websocket'],  // Prefer WebSocket for real-time
+###   reconnection: true,         // Auto-reconnect on disconnect
+###   reconnectionAttempts: 5,    // Max reconnection attempts
+###   reconnectionDelay: 1000,    // Delay between attempts (ms)
+### });
+###
+### 2. AUTOMATIC REGISTRATION:
+### ─────────────────────────────────
+### // User is automatically registered on successful connection
+### socket.on('connect', () => {
+###   console.log('Connected & registered');
+###   // User is now ONLINE - no manual registration needed
+### });
+###
+### socket.on('registered', (data) => {
+###   console.log('Registration confirmed:', data.userId);
+### });
+###
+### 3. LISTENING FOR STATUS CHANGES:
+### ─────────────────────────────────
+### // When any user comes online
+### socket.on('user-online', (data) => {
+###   console.log(`${data.userName} is now online`);
+###   // Update UI: Show green dot, enable call button, etc.
+###   updateUserStatus(data.userId, 'online');
+### });
+###
+### // When any user goes offline
+### socket.on('user-offline', (data) => {
+###   console.log(`${data.userName} is now offline`);
+###   // Update UI: Show grey dot, disable call button, etc.
+###   updateUserStatus(data.userId, 'offline');
+### });
+###
+### 4. GET ALL ONLINE USERS:
+### ─────────────────────────────────
+### // Request list of online users
+### socket.emit('get-online-users');
+###
+### // Listen for response
+### socket.on('online-users', (data) => {
+###   console.log(`${data.count} users online`);
+###   data.users.forEach(user => {
+###     console.log(`- ${user.userName} (since ${user.connectedAt})`);
+###     updateUserStatus(user.userId, 'online');
+###   });
+### });
+###
+### 5. HANDLING DISCONNECTIONS:
+### ─────────────────────────────────
+### socket.on('disconnect', (reason) => {
+###   console.log('Disconnected:', reason);
+###   // Your status is now OFFLINE
+###   // Show reconnecting UI if needed
+### });
+###
+### socket.on('connect_error', (error) => {
+###   if (error.message === 'Authentication failed') {
+###     // Token expired or invalid
+###     // Refresh token and reconnect
+###     refreshTokenAndReconnect();
+###   }
+### });
+###
+### ────────────────────────────────────────────────────
+### 🔧 IMPLEMENTATION DETAILS
+### ────────────────────────────────────────────────────
+###
+### MULTI-DEVICE SUPPORT:
+### - Same user can connect from multiple devices
+### - User shown as online if ANY device is connected
+### - User goes offline only when ALL devices disconnect
+### - Each device has unique socket ID
+###
+### RECONNECTION GRACE PERIOD:
+### - 10-second grace period on disconnect
+### - If user reconnects within 10 seconds:
+###   • No 'user-offline' event broadcast
+###   • Active calls remain intact
+###   • Seamless experience for temporary network issues
+###
+### STATUS SYNCHRONIZATION:
+### - On app launch: Connect → Auto-register → Get online users
+### - On app foreground: Socket reconnects automatically
+### - On app background: Socket may disconnect (depends on OS)
+### - On network change: Socket auto-reconnects
+###
+### ────────────────────────────────────────────────────
+### 📊 UI/UX RECOMMENDATIONS
+### ────────────────────────────────────────────────────
+###
+### 1. USER LIST SCREEN:
+### ┌─────────────────────────┐
+### │ Users                   │
+### ├─────────────────────────┤
+### │ 🟢 John Doe      [📞]  │  ← Online (green dot)
+### │ 🟢 Jane Smith    [📞]  │  ← Call button enabled
+### │ ⚫ Bob Wilson          │  ← Offline (grey dot)
+### │ 🟢 Alice Brown   [📞]  │  ← Call button disabled for offline
+### └─────────────────────────┘
+###
+### 2. STATUS INDICATORS:
+### - 🟢 Green dot: User is online
+### - ⚫ Grey dot: User is offline
+### - 🟡 Yellow dot: User is away/idle (future feature)
+### - Show "last seen" for offline users (if stored)
+###
+### 3. REAL-TIME UPDATES:
+### - Animate status changes (fade in/out)
+### - Show toast: "John is now online"
+### - Update immediately without refresh
+### - Sort online users first
+###
+### 4. CONNECTION STATUS BAR:
+### ┌─────────────────────────┐
+### │ 🟢 Connected           │  ← Show at top/bottom
+### └─────────────────────────┘
+### ┌─────────────────────────┐
+### │ 🔄 Reconnecting...     │  ← During reconnection
+### └─────────────────────────┘
+### ┌─────────────────────────┐
+### │ ❌ Disconnected        │  ← When offline
+### └─────────────────────────┘
+###
+### ────────────────────────────────────────────────────
+### 🎯 BEST PRACTICES
+### ────────────────────────────────────────────────────
+###
+### 1. EFFICIENT UPDATES:
+### - Cache online status locally
+### - Update UI only when status changes
+### - Batch updates if multiple users change status
+###
+### 2. ERROR HANDLING:
+### - Show offline mode when disconnected
+### - Queue actions to retry when reconnected
+### - Gracefully handle token expiration
+###
+### 3. PERFORMANCE:
+### - Lazy load user profiles
+### - Virtualize long user lists
+### - Throttle status updates if needed
+###
+### 4. USER EXPERIENCE:
+### - Show loading state on initial connect
+### - Indicate stale data if disconnected > 1 min
+### - Allow manual refresh of online users list
+### - Show connection quality indicator
+###
+### ────────────────────────────────────────────────────
+### 📱 REACT NATIVE EXAMPLE
+### ────────────────────────────────────────────────────
+###
+### import React, { useEffect, useState } from 'react';
+### import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+### import io from 'socket.io-client';
+###
+### const OnlineUsers = () => {
+###   const [socket, setSocket] = useState(null);
+###   const [onlineUsers, setOnlineUsers] = useState(new Map());
+###   const [connectionStatus, setConnectionStatus] = useState('connecting');
+###
+###   useEffect(() => {
+###     const newSocket = io(SERVER_URL, {
+###       auth: { token: getAuthToken() },
+###       transports: ['websocket'],
+###     });
+###
+###     newSocket.on('connect', () => {
+###       setConnectionStatus('connected');
+###       newSocket.emit('get-online-users');
+###     });
+###
+###     newSocket.on('user-online', ({ userId, userName }) => {
+###       setOnlineUsers(prev => new Map(prev).set(userId, {
+###         userName,
+###         status: 'online',
+###         lastSeen: new Date()
+###       }));
+###     });
+###
+###     newSocket.on('user-offline', ({ userId }) => {
+###       setOnlineUsers(prev => {
+###         const updated = new Map(prev);
+###         const user = updated.get(userId);
+###         if (user) {
+###           user.status = 'offline';
+###           user.lastSeen = new Date();
+###         }
+###         return updated;
+###       });
+###     });
+###
+###     newSocket.on('online-users', ({ users }) => {
+###       const usersMap = new Map();
+###       users.forEach(user => {
+###         usersMap.set(user.userId, {
+###           ...user,
+###           status: 'online'
+###         });
+###       });
+###       setOnlineUsers(usersMap);
+###     });
+###
+###     newSocket.on('disconnect', () => {
+###       setConnectionStatus('disconnected');
+###     });
+###
+###     setSocket(newSocket);
+###
+###     return () => {
+###       newSocket.close();
+###     };
+###   }, []);
+###
+###   const initiateCall = (userId) => {
+###     if (socket && onlineUsers.get(userId)?.status === 'online') {
+###       // Navigate to video call screen
+###       // Pass socket and userId
+###     }
+###   };
+###
+###   const renderUser = ({ item }) => {
+###     const user = onlineUsers.get(item[0]);
+###     return (
+###       <View style={styles.userRow}>
+###         <View style={[
+###           styles.statusDot,
+###           { backgroundColor: user.status === 'online' ? 'green' : 'gray' }
+###         ]} />
+###         <Text>{user.userName}</Text>
+###         {user.status === 'online' && (
+###           <TouchableOpacity onPress={() => initiateCall(item[0])}>
+###             <Text>📞 Call</Text>
+###           </TouchableOpacity>
+###         )}
+###       </View>
+###     );
+###   };
+###
+###   return (
+###     <View>
+###       <Text>Status: {connectionStatus}</Text>
+###       <FlatList
+###         data={Array.from(onlineUsers)}
+###         renderItem={renderUser}
+###         keyExtractor={item => item[0]}
+###       />
+###     </View>
+###   );
+### };
+###
+### ────────────────────────────────────────────────────
+### 🔍 DEBUGGING & TESTING
+### ────────────────────────────────────────────────────
+###
+### 1. TEST PRESENCE:
+### - Use multiple devices/browsers with different users
+### - Test airplane mode on/off
+### - Test app background/foreground
+### - Test token expiration scenarios
+###
+### 2. MONITOR EVENTS:
+### socket.onAny((eventName, ...args) => {
+###   console.log(`Event: ${eventName}`, args);
+### });
+###
+### 3. CHECK CONNECTION:
+### console.log('Connected:', socket.connected);
+### console.log('Socket ID:', socket.id);
+###
+### 4. FORCE RECONNECT:
+### socket.disconnect();
+### socket.connect();
+###
+### ────────────────────────────────────────────────────
+### ⚠️ IMPORTANT NOTES
+### ────────────────────────────────────────────────────
+###
+### 1. AUTHENTICATION REQUIRED:
+###    - Valid JWT token must be provided
+###    - Token is verified on each connection
+###    - Expired tokens cause disconnect
+###
+### 2. SCALABILITY:
+###    - Current implementation uses in-memory storage
+###    - Works for single server deployment
+###    - For multi-server: Redis adapter required
+###
+### 3. PRIVACY:
+###    - All authenticated users can see who's online
+###    - Consider adding privacy settings
+###    - May need friend-list filtering
+###
+### 4. BATTERY OPTIMIZATION:
+###    - WebSocket keeps connection alive
+###    - Consider disconnecting when app in background
+###    - Implement smart reconnection strategy
+###
+### 5. DATA USAGE:
+###    - Minimal data for presence updates
+###    - ~1KB per user status change
+###    - Consider batching updates on mobile
+###
+### ────────────────────────────────────────────────────

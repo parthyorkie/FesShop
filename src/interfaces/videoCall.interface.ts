@@ -95,6 +95,10 @@ export interface UserPresencePayload {
   userName?: string;
 }
 
+export interface OnlineUsersPayload {
+  userIds: string[];
+}
+
 export interface SocketErrorPayload {
   code: string;
   message: string;

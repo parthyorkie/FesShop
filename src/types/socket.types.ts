@@ -19,6 +19,7 @@ import {
   CallRejectedPayload,
   CallEndedPayload,
   UserPresencePayload,
+  OnlineUsersPayload,
   SocketErrorPayload,
 } from '../interfaces/videoCall.interface';
 
@@ -45,6 +46,7 @@ export interface ClientToServerEvents {
   'ice-candidate': (payload: IceCandidatePayload) => void;
   'reject-call': (payload: RejectCallPayload, callback?: (response: { success: boolean; message?: string }) => void) => void;
   'end-call': (payload: EndCallPayload, callback?: (response: { success: boolean; message?: string }) => void) => void;
+  'get-online-users': () => void;
 }
 
 // Events sent from server to client
@@ -56,6 +58,7 @@ export interface ServerToClientEvents {
   'call-ended': (payload: CallEndedPayload) => void;
   'user-online': (payload: UserPresencePayload) => void;
   'user-offline': (payload: UserPresencePayload) => void;
+  'online-users': (payload: OnlineUsersPayload) => void;
   'error': (payload: SocketErrorPayload) => void;
   'registered': (payload: { userId: string; message: string }) => void;
 }

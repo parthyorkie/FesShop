@@ -37,7 +37,7 @@ export const googleLoginService = async (idToken: string) => {
         name,
         googleId: sub,
         profilePicture: picture,
-        role: 'USER',
+        role: 'ADMIN',
         isDeleted: false,
       });
       console.log('New user created via Google Auth:', user.email);

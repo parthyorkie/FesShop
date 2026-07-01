@@ -44,6 +44,10 @@ import {
   logIceCandidate,
   logSocketError,
   logValidationError,
+  logUserOnline,
+  logUserOffline,
+  logOnlineUsersRequested,
+  logCurrentOnlineCount,
 } from '../utils/videoCall.logger';
 import User from '../models/User';
 
@@ -170,11 +174,15 @@ const handleRegisterUser = (
 ) => {
   const user = getSocketUser(socket);
   
-  // Register user in presence service
+  // Check if this is the user's first socket BEFORE registering
+  const wasOnline = presenceService.isUserOnline(user.id);
+  
+  // Register user in presence service (supports multi-device)
   const previousSocketId = presenceService.registerUser(user.id, socket.id);
 
   // If user had previous connection from a DIFFERENT socket, disconnect the old one
   // Skip if it's the same socket (duplicate registration from same connection)
+  // NOTE: This logic is for replacing old sockets during call migration, not multi-device
   if (previousSocketId && previousSocketId !== socket.id) {
     const previousSocket = getSocketById(io, previousSocketId);
     if (previousSocket) {
@@ -193,11 +201,15 @@ const handleRegisterUser = (
     }
   }
 
-  // Broadcast user online status
-  socket.broadcast.emit(SERVER_EVENTS.USER_ONLINE, {
-    userId: user.id,
-    userName: user.name,
-  });
+  // Broadcast user online status ONLY if this is the user's first socket
+  // (user wasn't online before)
+  if (!wasOnline) {
+    socket.broadcast.emit(SERVER_EVENTS.USER_ONLINE, {
+      userId: user.id,
+      userName: user.name,
+    });
+    logUserOnline(user.id);
+  }
 
   // Send confirmation
   socket.emit(SERVER_EVENTS.REGISTERED, {
@@ -588,6 +600,26 @@ const handleEndCall = async (
 };
 
 /**
+ * Handle get online users request
+ */
+const handleGetOnlineUsers = (
+  socket: TypedSocket
+) => {
+  const user = getSocketUser(socket);
+  
+  // Get all online user IDs from presence service
+  const userIds = presenceService.getAllOnlineUserIds();
+  
+  // Send response
+  socket.emit(SERVER_EVENTS.ONLINE_USERS, {
+    userIds
+  });
+  
+  logOnlineUsersRequested(socket.id, user.id);
+  logCurrentOnlineCount(userIds.length);
+};
+
+/**
  * Handle socket disconnection
  */
 const handleDisconnect = async (
@@ -657,7 +689,13 @@ const handleDisconnect = async (
         activeCall.disconnectTimeoutId = disconnectTimeout;
 
         // Remove stale socket from presence but keep call state alive
-        presenceService.removeBySocketId(socket.id);
+        const removalResult = presenceService.removeBySocketId(socket.id);
+        
+        // Only emit USER_OFFLINE if this was the user's last socket
+        if (removalResult.userOffline) {
+          // Deferred offline broadcast (will be cancelled if user reconnects)
+          // Note: This is included in the timeout to allow cancellation during grace period
+        }
 
         logDisconnect(user.id, socket.id, `${reason} (grace period started)`);
         return;
@@ -665,13 +703,16 @@ const handleDisconnect = async (
     }
 
     // No active call — clean up immediately
-    presenceService.removeBySocketId(socket.id);
+    const removalResult = presenceService.removeBySocketId(socket.id);
 
-    // Broadcast user offline
-    socket.broadcast.emit(SERVER_EVENTS.USER_OFFLINE, {
-      userId: user.id,
-      userName: user.name,
-    });
+    // Broadcast user offline only if this was the last socket
+    if (removalResult.userOffline) {
+      socket.broadcast.emit(SERVER_EVENTS.USER_OFFLINE, {
+        userId: user.id,
+        userName: user.name,
+      });
+      logUserOffline(user.id);
+    }
   }
 
   logDisconnect(user.id, socket.id, reason);
@@ -741,6 +782,10 @@ export const initializeVideoCallSocket = (
 
     socket.on(CLIENT_EVENTS.END_CALL, (payload, callback) => {
       handleEndCall(io, socket, payload, callback);
+    });
+
+    socket.on(CLIENT_EVENTS.GET_ONLINE_USERS, () => {
+      handleGetOnlineUsers(socket);
     });
 
     socket.on('disconnect', (reason) => {
