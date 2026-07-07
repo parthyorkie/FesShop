@@ -30,12 +30,15 @@ export const reviewIdSchema = Joi.object({
 
 // ✅ Update Review Schema
 export const updateReviewSchema = Joi.object({
+  id: objectId.required().messages({
+    "any.required": "Review ID is required",
+  }),
   rating: Joi.number().integer().min(1).max(5).optional().messages({
     "number.min": "Rating must be at least 1",
     "number.max": "Rating must be at most 5",
   }),
   comment: Joi.string().trim().max(1000).optional(),
-}).min(1); // At least one field required for update
+}).or("rating", "comment"); // At least one updatable field required
 
 // ✅ List Reviews Schema (query params)
 export const listReviewsSchema = Joi.object({

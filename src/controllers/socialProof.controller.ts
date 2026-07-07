@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { createApiResponse } from "../utils/ApiResponse";
 import { getRecentSocialProofEventsService, getSocialProofMetrics } from "../services/socialProof.service";
-import { getRecentEventsSchema } from "../validations/socialProof.validation";
 import { logger } from "../utils/logger";
 import { SocialProofMetricsDto } from "../dtos/socialProof.dto";
 
@@ -57,19 +56,10 @@ import { SocialProofMetricsDto } from "../dtos/socialProof.dto";
  *               $ref: '#/components/schemas/ApiError'
  */
 export const getRecentSocialProofEvents = asyncHandler(async (req: Request, res: Response) => {
-  const { limit } = req.query;
+  // The limit has already been validated by the validate middleware
+  const limit = req.query.limit ? Number(req.query.limit) : 10;
 
-  // Validate query parameters using Joi schema
-  const { error, value } = getRecentEventsSchema.validate({ limit });
-
-  if (error) {
-    logger.warn(`[SocialProofController] Validation error for getRecentSocialProofEvents: ${error.message}`);
-    return res.status(400).json(createApiResponse(400, null, error.message, undefined));
-  }
-
-  const validatedLimit = value.limit as number;
-
-  const events = await getRecentSocialProofEventsService(validatedLimit);
+  const events = await getRecentSocialProofEventsService(limit);
 
   res.status(200).json(createApiResponse(200, events, "Recent social proof events fetched successfully"));
 });

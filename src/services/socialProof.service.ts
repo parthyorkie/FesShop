@@ -13,6 +13,7 @@ import { generateMessage } from "../utils/socialProofMessage";
 import { ISocialProofEvent, SocialProofEventType } from "../models/socialProofEvent.model";
 import { RecentSocialProofEventDto } from "../dtos/socialProof.dto";
 import { broadcastSocialProofEvent } from "./socket.service";
+import Joi from "joi";
 
 /**
  * Duplicate Broadcast Prevention
@@ -69,7 +70,8 @@ export const trackEvent = async (payload: any): Promise<ISocialProofEvent> => {
   );
 
   // 1. Validate payload structure using Joi
-  const { value, error } = trackEventSchema.validate(payload, {
+  const schema = Joi.object(trackEventSchema);
+  const { value, error } = schema.validate(payload, {
     abortEarly: false,
     stripUnknown: true,
   });
@@ -132,6 +134,7 @@ export const trackEvent = async (payload: any): Promise<ISocialProofEvent> => {
         // Broadcast to all connected clients
         broadcastSocialProofEvent({
           id: eventId,
+          type: persistedEvent.type,
           message,
           createdAt: persistedEvent.createdAt,
         });

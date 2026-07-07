@@ -5,7 +5,7 @@ const objectId = Joi.string()
   .pattern(/^[0-9a-fA-F]{24}$/)
   .message("{{#label}} must be a valid MongoDB ID");
 
-export const trackEventSchema = Joi.object({
+export const trackEventSchema = {
   type: Joi.string()
     .valid(...Object.values(SocialProofEventType))
     .required()
@@ -16,19 +16,21 @@ export const trackEventSchema = Joi.object({
   userId: objectId.optional(),
   productId: objectId.optional(),
   metadata: Joi.object().unknown(true).optional().default({}),
-});
+};
 
-export const getRecentEventsSchema = Joi.object({
-  limit: Joi.number()
-    .integer()
-    .min(1)
-    .max(100) // Assuming a reasonable max limit
-    .default(10)
-    .optional()
-    .messages({
-      "number.base": "Limit must be a number",
-      "number.integer": "Limit must be an integer",
-      "number.min": "Limit must be at least 1",
-      "number.max": "Limit cannot exceed 100",
-    }),
-});
+export const getRecentEventsSchema = {
+  query: Joi.object({
+    limit: Joi.number()
+      .integer()
+      .min(1)
+      .max(100) // Assuming a reasonable max limit
+      .default(10)
+      .optional()
+      .messages({
+        "number.base": "Limit must be a number",
+        "number.integer": "Limit must be an integer",
+        "number.min": "Limit must be at least 1",
+        "number.max": "Limit cannot exceed 100",
+      }),
+  }),
+};

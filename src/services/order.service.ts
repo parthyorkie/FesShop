@@ -72,6 +72,7 @@ export const createOrderService = async (data: Partial<IOrder>) => {
           price: item.price,
           totalAmount: order.totalAmount,
           paymentMethod: order.paymentMethod,
+          userName: order.customerSnapshot?.name || "Someone",
         },
       });
     } catch (socialProofErr: any) {

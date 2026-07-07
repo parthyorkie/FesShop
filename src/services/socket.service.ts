@@ -82,6 +82,7 @@ export const getSocketInstance = (): SocketIOServer | null => {
  */
 export const broadcastSocialProofEvent = (payload: {
   id: string;
+  type?: string;
   message: string;
   createdAt: Date;
 }): void => {

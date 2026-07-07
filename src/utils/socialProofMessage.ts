@@ -40,8 +40,9 @@ const MESSAGE_TEMPLATES: Record<SocialProofEventType, MessageTemplate> = {
   },
 
   [SocialProofEventType.PURCHASE]: (metadata) => {
+    console.log("metadata", metadata);
     const userName = metadata?.userName || metadata?.name || "Someone";
-    return `${userName} completed a purchase`;
+    return `${userName}  bought  ${metadata?.productName || "a product"}`;
   },
 
   [SocialProofEventType.REVIEW]: (metadata) => {

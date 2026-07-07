@@ -16,6 +16,7 @@
 @orderId = REPLACE_WITH_ORDER_ID
 @customerId = REPLACE_WITH_CUSTOMER_ID
 @festivalId = REPLACE_WITH_FESTIVAL_ID
+@reviewId = REPLACE_WITH_REVIEW_ID
 
 ### ====================================================
 ### 🔐 AUTH APIs
@@ -620,3 +621,327 @@ Content-Type: application/json
   "newPassword": "NewPassword456"
 }
 
+### ====================================================
+### ⭐ REVIEW APIs
+### ====================================================
+
+### 1. Create Review [AUTHENTICATED]
+# Creates a new product review
+# Required: userId (ObjectId), productId (ObjectId), rating (1-5)
+# Optional: comment (max 1000 chars)
+# Note: This triggers a REVIEW social proof event
+# Response: 201 Created with review object
+POST {{baseUrl}}/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "productId": "{{productId}}",
+  "rating": 5,
+  "comment": "Excellent product! Highly recommended."
+}
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 201 Created
+# {
+#   "statusCode": 201,
+#   "data": {
+#     "_id": "507f1f77bcf86cd799439011",
+#     "userId": "507f1f77bcf86cd799439012",
+#     "productId": "507f1f77bcf86cd799439013",
+#     "rating": 5,
+#     "comment": "Excellent product! Highly recommended.",
+#     "isDeleted": false,
+#     "createdAt": "2024-05-11T10:30:00.000Z",
+#     "updatedAt": "2024-05-11T10:30:00.000Z",
+#     "__v": 0
+#   },
+#   "message": "Review created successfully"
+# }
+
+### ----------------------------------------------------
+### 2. List Reviews [PUBLIC]
+# Retrieves reviews with optional filtering and pagination
+# Query Parameters:
+#   - page: Page number (default: 1)
+#   - limit: Items per page (1-100, default: 10)
+#   - productId: Filter by product ID
+#   - userId: Filter by user ID
+# Response: 200 OK with paginated reviews array
+GET {{baseUrl}}/reviews?page=1&limit=10
+Content-Type: application/json
+
+### List Reviews by Product
+GET {{baseUrl}}/reviews?productId={{productId}}&page=1&limit=10
+Content-Type: application/json
+
+### List Reviews by User
+GET {{baseUrl}}/reviews?userId={{userId}}&page=1&limit=10
+Content-Type: application/json
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 200 OK
+# {
+#   "statusCode": 200,
+#   "data": [
+#     {
+#       "_id": "507f1f77bcf86cd799439011",
+#       "userId": {
+#         "_id": "507f1f77bcf86cd799439012",
+#         "name": "John Doe"
+#       },
+#       "productId": {
+#         "_id": "507f1f77bcf86cd799439013",
+#         "name": "Samsung Galaxy S24"
+#       },
+#       "rating": 5,
+#       "comment": "Excellent product!",
+#       "createdAt": "2024-05-11T10:30:00.000Z"
+#     }
+#   ],
+#   "message": "Reviews fetched successfully",
+#   "pagination": {
+#     "page": 1,
+#     "limit": 10,
+#     "total": 25,
+#     "totalPages": 3,
+#     "hasNextPage": true,
+#     "hasPrevPage": false
+#   }
+# }
+
+### ----------------------------------------------------
+### 3. Get Single Review [PUBLIC]
+# Requires: valid review ID (24-char hex)
+# Response: 200 OK with review object or 404 if not found
+GET {{baseUrl}}/reviews/{{reviewId}}
+Content-Type: application/json
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 200 OK
+# {
+#   "statusCode": 200,
+#   "data": {
+#     "_id": "507f1f77bcf86cd799439011",
+#     "userId": {
+#       "_id": "507f1f77bcf86cd799439012",
+#       "name": "John Doe"
+#     },
+#     "productId": {
+#       "_id": "507f1f77bcf86cd799439013",
+#       "name": "Samsung Galaxy S24"
+#     },
+#     "rating": 5,
+#     "comment": "Excellent product! Highly recommended.",
+#     "isDeleted": false,
+#     "createdAt": "2024-05-11T10:30:00.000Z",
+#     "updatedAt": "2024-05-11T10:30:00.000Z"
+#   },
+#   "message": "Review retrieved successfully"
+# }
+
+### ----------------------------------------------------
+### 4. Update Review [AUTHENTICATED]
+# Requires: valid review ID, at least one field to update
+# Can update: rating (1-5), comment
+# Response: 200 OK with updated review object
+PUT {{baseUrl}}/reviews/{{reviewId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "rating": 4,
+  "comment": "Updated review - Still a great product!"
+}
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 200 OK
+# {
+#   "statusCode": 200,
+#   "data": {
+#     "_id": "507f1f77bcf86cd799439011",
+#     "userId": "507f1f77bcf86cd799439012",
+#     "productId": "507f1f77bcf86cd799439013",
+#     "rating": 4,
+#     "comment": "Updated review - Still a great product!",
+#     "isDeleted": false,
+#     "createdAt": "2024-05-11T10:30:00.000Z",
+#     "updatedAt": "2024-05-11T11:45:00.000Z"
+#   },
+#   "message": "Review updated successfully"
+# }
+
+### ----------------------------------------------------
+### 5. Delete Review - Soft Delete [ADMIN]
+# Requires: valid review ID
+# Review data is preserved but marked as deleted
+# Response: 200 OK with success message
+DELETE {{baseUrl}}/reviews/{{reviewId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+### RESPONSE EXAMPLE:
+# HTTP/1.1 200 OK
+# {
+#   "statusCode": 200,
+#   "data": null,
+#   "message": "Review deleted successfully"
+# }
+
+### ====================================================
+### 📊 SOCIALPROOF APIs
+### ====================================================
+### The SocialProof feature tracks and broadcasts user activities 
+### in real-time to create social validation and increase engagement.
+### Events are automatically triggered by user actions and can be
+### retrieved via REST APIs or received via WebSocket connection.
+
+### ----------------------------------------------------
+### 1. Get Recent Social Proof Events [PUBLIC]
+# Retrieves the most recent social proof events
+# Query Parameters:
+#   - limit: Number of events to return (1-100, default: 10)
+GET {{baseUrl}}/social-proof/recent?limit=20
+Content-Type: application/json
+
+### ----------------------------------------------------
+### 2. Get Social Proof Metrics [PUBLIC]
+# Returns aggregated metrics for today (UTC-based)
+# Response includes:
+#   - signupsToday: Number of new user registrations
+#   - purchasesToday: Number of completed purchases
+#   - reviewsToday: Number of product reviews submitted
+#   - activeUsers: Count of unique users with any activity
+GET {{baseUrl}}/social-proof/metrics
+Content-Type: application/json
+
+### ====================================================
+### 🔌 WEBSOCKET CONNECTION (Socket.IO)
+### ====================================================
+### WebSocket URL: ws://localhost:3000
+### 
+### The SocialProof feature uses WebSocket for real-time event broadcasting.
+### Events are automatically sent to all connected clients when users:
+### - Sign up (SIGNUP event)
+### - Make a purchase (PURCHASE event)  
+### - Submit a review (REVIEW event)
+### - View products (VIEW event)
+### - Come online (ONLINE_USER event)
+###
+### CLIENT IMPLEMENTATION EXAMPLE:
+### ```javascript
+### import io from 'socket.io-client';
+### 
+### // Connect to WebSocket server
+### const socket = io('http://localhost:3000', {
+###   transports: ['websocket'],
+###   cors: {
+###     origin: process.env.CORS_ORIGIN || '*'
+###   }
+### });
+### 
+### // Listen for connection
+### socket.on('connect', () => {
+###   console.log('Connected to SocialProof WebSocket');
+### });
+### 
+### // Listen for new social proof events
+### socket.on('social-proof:new', (data) => {
+###   console.log('New activity:', data);
+###   // data structure:
+###   // {
+###   //   id: "507f1f77bcf86cd799439011",
+###   //   message: "John Doe joined recently",
+###   //   createdAt: "2024-01-15T10:30:00Z"
+###   // }
+### });
+### 
+### // Handle disconnection
+### socket.on('disconnect', () => {
+###   console.log('Disconnected from WebSocket');
+### });
+### 
+### // Handle errors
+### socket.on('error', (error) => {
+###   console.error('WebSocket error:', error);
+### });
+### ```
+###
+### REACT NATIVE IMPLEMENTATION:
+### ```javascript
+### import io from 'socket.io-client';
+### import { useEffect, useState } from 'react';
+### 
+### const useSocialProof = () => {
+###   const [events, setEvents] = useState([]);
+###   const [isConnected, setIsConnected] = useState(false);
+### 
+###   useEffect(() => {
+###     const socket = io('http://your-api-url.com');
+###     
+###     socket.on('connect', () => setIsConnected(true));
+###     socket.on('disconnect', () => setIsConnected(false));
+###     
+###     socket.on('social-proof:new', (event) => {
+###       setEvents(prev => [event, ...prev].slice(0, 50));
+###       // Show notification or update UI
+###     });
+### 
+###     return () => socket.disconnect();
+###   }, []);
+### 
+###   return { events, isConnected };
+### };
+### ```
+###
+
+
+### ====================================================
+### 📝 SOCIALPROOF EVENT TYPES
+### ====================================================
+### The following event types are automatically tracked:
+### 
+### 1. SIGNUP - When a new user registers
+###    Message format: "{userName} joined recently"
+###    Triggered in: /auth/register endpoint
+###
+### 2. PURCHASE - When a user completes an order
+###    Message format: "{userName} completed a purchase"
+###    Triggered in: Order creation/completion
+###
+### 3. REVIEW - When a user submits a product review
+###    Message format: "{userName} left a review"
+###    Triggered in: Review creation endpoint
+###
+### 4. VIEW - When a user views a product (future)
+###    Message format: "{userName} is viewing a product"
+###    
+### 5. ONLINE_USER - When a user comes online (future)
+###    Message format: "{userName} is online"
+
+### ====================================================
+### 🔄 SOCIALPROOF INTEGRATION NOTES
+### ====================================================
+### 
+### AUTOMATIC TRIGGERS:
+### - Events are automatically triggered by user actions
+### - No manual API calls needed to create events
+### - Broadcasting happens in real-time via WebSocket
+### 
+### PRIVACY & SECURITY:
+### - User names are anonymized as "Someone" if not available
+### - No sensitive data is exposed in events
+### - Rate limiting prevents spam (100 events/hour per user)
+### - Events older than 1 hour are cleaned from broadcast cache
+###
+### ERROR HANDLING:
+### - Social proof failures don't break main operations
+### - Events continue even if WebSocket is disconnected
+### - Duplicate broadcasts are prevented automatically
+###
+### PERFORMANCE:
+### - Events are indexed for fast retrieval
+### - WebSocket uses efficient binary protocol
+### - Metrics are cached and updated periodically
+### - In-memory cache prevents duplicate broadcasts
