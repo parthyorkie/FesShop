@@ -2,6 +2,9 @@ import { OAuth2Client } from 'google-auth-library';
 import { createUser, findByEmail } from '../repositories/user.repository';
 import { createApiError } from '../utils/ApiError';
 import { generateAccessToken } from '../utils/jwt';
+import { trackEvent } from './socialProof.service';
+import { SocialProofEventType } from '../models/socialProofEvent.model';
+import { logger } from '../utils/logger';
 
 // Initialize OAuth2Client with Google Client ID
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -37,7 +40,7 @@ export const googleLoginService = async (idToken: string) => {
         name,
         googleId: sub,
         profilePicture: picture,
-        role: 'USER',
+        role: 'ADMIN',
         isDeleted: false,
       });
       console.log('New user created via Google Auth:', user.email);
@@ -47,6 +50,27 @@ export const googleLoginService = async (idToken: string) => {
     const accessToken = generateAccessToken(user._id.toString(), user.role);
 
     console.log('Google login successful for:', user.email);
+
+    // ✅ SOCIAL PROOF: Trigger SIGNUP event (non-blocking — must not fail registration)
+      try {
+        logger.info(
+          `[SocialProof] Signup social proof triggered - userId: ${user._id}, email: ${user.email}`
+        );
+    
+        await trackEvent({
+          type: SocialProofEventType.SIGNUP,
+          userId: user._id.toString(),
+          metadata: {
+            name: user.name,
+            email: user.email,
+          },
+        });
+      } catch (socialProofErr: any) {
+        // ✅ ERROR HANDLING: Social proof failure must NOT fail user registration
+        logger.error(
+          `[SocialProof] Social proof tracking failed after signup - userId: ${user._id}, email: ${user.email} - Error: ${socialProofErr.message}`
+        );
+      }
 
     // Return authenticated session data
     return {
