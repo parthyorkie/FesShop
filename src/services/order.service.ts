@@ -4,7 +4,10 @@ import * as orderRepo from "../repositories/order.repository";
 import * as productRepo from "../repositories/product.repository";
 
 import { IOrder } from "../models/order.model";
+import { SocialProofEventType } from "../models/socialProofEvent.model";
+import { trackEvent } from "./socialProof.service";
 import { createApiError } from "../utils/ApiError";
+import { logger } from "../utils/logger";
 import {
   formatPaginationData,
   getPaginationOptions,
@@ -47,7 +50,40 @@ export const createOrderService = async (data: Partial<IOrder>) => {
     throw createApiError(400, "Customer phone is required");
   }
 
-  return await orderRepo.createOrderInDb(data);
+  const order = await orderRepo.createOrderInDb(data);
+
+  // ✅ SOCIAL PROOF: Trigger PURCHASE event per product (non-blocking — must not fail order creation)
+  const userId = order.customer?.toString();
+
+  for (const item of order.items) {
+    try {
+      logger.info(
+        `[SocialProof] Purchase social proof triggered - orderId: ${order._id}, productId: ${item.product}, userId: ${userId || "N/A"}`
+      );
+
+      await trackEvent({
+        type: SocialProofEventType.PURCHASE,
+        ...(userId ? { userId } : {}),
+        productId: item.product.toString(),
+        metadata: {
+          orderId: order._id.toString(),
+          productName: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          totalAmount: order.totalAmount,
+          paymentMethod: order.paymentMethod,
+          userName: order.customerSnapshot?.name || "Someone",
+        },
+      });
+    } catch (socialProofErr: any) {
+      // ✅ ERROR HANDLING: Social proof failure must NOT fail order creation
+      logger.error(
+        `[SocialProof] Social proof tracking failed after order creation - orderId: ${order._id}, productId: ${item.product}, userId: ${userId || "N/A"} - Error: ${socialProofErr.message}`
+      );
+    }
+  }
+
+  return order;
 };
 
 // ✅ GET SINGLE ORDER
