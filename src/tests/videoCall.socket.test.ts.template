@@ -1,0 +1,316 @@
+/**
+ * Video Call Socket Tests
+ * 
+ * Unit and integration tests for video call socket functionality.
+ * Focus on PR-02: Active Call Recovery
+ */
+
+import { Server as HttpServer } from 'http';
+import { Socket as ClientSocket } from 'socket.io-client';
+import { initializeVideoCallSocket } from '../socket/videoCall.socket';
+import { TypedServer, TypedSocket } from '../types/socket.types';
+import { ActiveCall, CallStatePayload, CallRecoveredPayload } from '../interfaces/videoCall.interface';
+import { CLIENT_EVENTS, SERVER_EVENTS } from '../constants/videoCall.constants';
+
+// Mock dependencies
+jest.mock('../middlewares/socketAuth.middleware');
+jest.mock('../services/presence.service');
+jest.mock('../services/videoCall.service');
+jest.mock('../services/oneSignal.service');
+jest.mock('../models/User');
+jest.mock('../utils/videoCall.logger');
+
+describe('Video Call Socket - PR-02: Active Call Recovery', () => {
+  let httpServer: HttpServer;
+  let io: TypedServer;
+  let clientSocket1: ClientSocket;
+  let clientSocket2: ClientSocket;
+  let reconnectedSocket: ClientSocket;
+
+  beforeAll(async () => {
+    // Setup server
+    httpServer = new HttpServer();
+    io = initializeVideoCallSocket(httpServer, '*');
+    await new Promise(resolve => httpServer.listen(3001, resolve as () => void));
+  });
+
+  afterAll(async () => {
+    io.close();
+    httpServer.close();
+  });
+
+  beforeEach(() => {
+    // Clear mocks
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    // Disconnect clients
+    if (clientSocket1?.connected) clientSocket1.disconnect();
+    if (clientSocket2?.connected) clientSocket2.disconnect();
+    if (reconnectedSocket?.connected) reconnectedSocket.disconnect();
+  });
+
+  describe('Call State Recovery on Reconnection', () => {
+    it('should restore active call state when user reconnects during a pending call', async () => {
+      // Test implementation for pending call recovery
+      const mockCallRecordId = '507f1f77bcf86cd799439011';
+      const mockCallerId = 'user1';
+      const mockReceiverId = 'user2';
+      const mockOffer = { type: 'offer' as const, sdp: 'mock-offer-sdp' };
+
+      // Simulate an active pending call
+      const activeCall: ActiveCall = {
+        callRecordId: mockCallRecordId,
+        callerId: mockCallerId,
+        receiverId: mockReceiverId,
+        startedAt: new Date(),
+        answered: false,
+        bufferedCandidates: { forCaller: [], forReceiver: [] },
+        lastOffer: mockOffer,
+      };
+
+      // Test reconnection and call state recovery
+      const callStatePromise = new Promise<CallStatePayload>((resolve) => {
+        reconnectedSocket.on(SERVER_EVENTS.CALL_STATE, resolve);
+      });
+
+      // Trigger reconnection
+      reconnectedSocket.emit(CLIENT_EVENTS.REGISTER_USER, { userId: mockCallerId });
+
+      const callState = await callStatePromise;
+      expect(callState.callRecordId).toBe(mockCallRecordId);
+      expect(callState.status).toBe('PENDING');
+      expect(callState.offer).toEqual(mockOffer);
+    });
+
+    it('should restore active call state when user reconnects during an answered call', async () => {
+      // Test implementation for answered call recovery
+      const mockCallRecordId = '507f1f77bcf86cd799439012';
+      const mockCallerId = 'user1';
+      const mockReceiverId = 'user2';
+      const mockOffer = { type: 'offer' as const, sdp: 'mock-offer-sdp' };
+      const mockAnswer = { type: 'answer' as const, sdp: 'mock-answer-sdp' };
+
+      // Simulate an active answered call
+      const activeCall: ActiveCall = {
+        callRecordId: mockCallRecordId,
+        callerId: mockCallerId,
+        receiverId: mockReceiverId,
+        startedAt: new Date(),
+        answered: true,
+        bufferedCandidates: { forCaller: [], forReceiver: [] },
+        lastOffer: mockOffer,
+        lastAnswer: mockAnswer,
+      };
+
+      // Test reconnection and call state recovery
+      const callStatePromise = new Promise<CallStatePayload>((resolve) => {
+        reconnectedSocket.on(SERVER_EVENTS.CALL_STATE, resolve);
+      });
+
+      // Trigger reconnection
+      reconnectedSocket.emit(CLIENT_EVENTS.REGISTER_USER, { userId: mockReceiverId });
+
+      const callState = await callStatePromise;
+      expect(callState.callRecordId).toBe(mockCallRecordId);
+      expect(callState.status).toBe('ANSWERED');
+      expect(callState.offer).toEqual(mockOffer);
+      expect(callState.answer).toEqual(mockAnswer);
+    });
+
+    it('should notify peer when user reconnects during active call', async () => {
+      // Test peer notification on reconnection
+      const mockCallRecordId = '507f1f77bcf86cd799439013';
+      const mockCallerId = 'user1';
+      const mockReceiverId = 'user2';
+      const mockCallerName = 'User One';
+
+      // Setup peer socket listener
+      const peerNotificationPromise = new Promise<CallRecoveredPayload>((resolve) => {
+        clientSocket2.on(SERVER_EVENTS.CALL_RECOVERED, resolve);
+      });
+
+      // Simulate reconnection
+      reconnectedSocket.emit(CLIENT_EVENTS.REGISTER_USER, { userId: mockCallerId });
+
+      const notification = await peerNotificationPromise;
+      expect(notification.callRecordId).toBe(mockCallRecordId);
+      expect(notification.peerId).toBe(mockCallerId);
+      expect(notification.peerName).toBe(mockCallerName);
+      expect(notification.isReconnecting).toBe(true);
+    });
+
+    it('should cancel disconnect timeout when user reconnects quickly', async () => {
+      // Test that disconnect grace period is cancelled on reconnection
+      const mockCallRecordId = '507f1f77bcf86cd799439014';
+      const mockUserId = 'user1';
+
+      // Simulate disconnect
+      clientSocket1.disconnect();
+
+      // Reconnect within grace period
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+      reconnectedSocket.emit(CLIENT_EVENTS.REGISTER_USER, { userId: mockUserId });
+
+      // Verify call is still active (no call-ended event)
+      const callEndedPromise = new Promise((resolve, reject) => {
+        reconnectedSocket.on(SERVER_EVENTS.CALL_ENDED, reject);
+        setTimeout(resolve, 2000); // Wait 2 seconds for no event
+      });
+
+      await expect(callEndedPromise).resolves.toBeUndefined();
+    });
+  });
+
+  describe('Explicit Call Recovery', () => {
+    it('should recover call state using recover-call event', async () => {
+      // Test explicit call recovery
+      const mockCallRecordId = '507f1f77bcf86cd799439015';
+      const mockCallerId = 'user1';
+      const mockReceiverId = 'user2';
+      const mockOffer = { type: 'offer' as const, sdp: 'mock-offer-sdp' };
+
+      // Request call recovery
+      const recoveryPromise = new Promise<{ success: boolean; callState?: CallStatePayload }>((resolve) => {
+        clientSocket1.emit(CLIENT_EVENTS.RECOVER_CALL, 
+          { callRecordId: mockCallRecordId },
+          resolve
+        );
+      });
+
+      const response = await recoveryPromise;
+      expect(response.success).toBe(true);
+      expect(response.callState).toBeDefined();
+      expect(response.callState?.callRecordId).toBe(mockCallRecordId);
+    });
+
+    it('should reject recovery for non-existent call', async () => {
+      // Test recovery rejection for invalid call
+      const invalidCallId = '507f1f77bcf86cd799439999';
+
+      const recoveryPromise = new Promise<{ success: boolean; message?: string }>((resolve) => {
+        clientSocket1.emit(CLIENT_EVENTS.RECOVER_CALL, 
+          { callRecordId: invalidCallId },
+          resolve
+        );
+      });
+
+      const response = await recoveryPromise;
+      expect(response.success).toBe(false);
+      expect(response.message).toContain('No active call found');
+    });
+
+    it('should reject recovery for unauthorized user', async () => {
+      // Test recovery rejection for unauthorized user
+      const mockCallRecordId = '507f1f77bcf86cd799439016';
+      const unauthorizedUserId = 'user3';
+
+      const recoveryPromise = new Promise<{ success: boolean; message?: string }>((resolve) => {
+        clientSocket1.emit(CLIENT_EVENTS.RECOVER_CALL, 
+          { callRecordId: mockCallRecordId },
+          resolve
+        );
+      });
+
+      const response = await recoveryPromise;
+      expect(response.success).toBe(false);
+      expect(response.message).toContain('Not authorized');
+    });
+  });
+
+  describe('Signaling Continuity', () => {
+    it('should preserve offer/answer for reconnection', async () => {
+      // Test that offer and answer are preserved in active call
+      const mockOffer = { type: 'offer' as const, sdp: 'detailed-offer-sdp' };
+      const mockAnswer = { type: 'answer' as const, sdp: 'detailed-answer-sdp' };
+
+      // Initiate call with offer
+      await new Promise<void>((resolve) => {
+        clientSocket1.emit(CLIENT_EVENTS.CALL_USER, {
+          callerId: 'user1',
+          receiverId: 'user2',
+          offer: mockOffer,
+        }, () => resolve());
+      });
+
+      // Answer call
+      await new Promise<void>((resolve) => {
+        clientSocket2.emit(CLIENT_EVENTS.ANSWER_CALL, {
+          callerId: 'user1',
+          answer: mockAnswer,
+        }, () => resolve());
+      });
+
+      // Simulate reconnection and verify state
+      const callStatePromise = new Promise<CallStatePayload>((resolve) => {
+        reconnectedSocket.on(SERVER_EVENTS.CALL_STATE, resolve);
+      });
+
+      reconnectedSocket.emit(CLIENT_EVENTS.REGISTER_USER, { userId: 'user1' });
+
+      const callState = await callStatePromise;
+      expect(callState.offer).toEqual(mockOffer);
+      expect(callState.answer).toEqual(mockAnswer);
+    });
+
+    it('should handle ICE candidates after reconnection', async () => {
+      // Test ICE candidate handling after recovery
+      const mockCandidate = {
+        candidate: 'candidate:123',
+        sdpMid: '0',
+        sdpMLineIndex: 0,
+      };
+
+      // Send ICE candidate after reconnection
+      reconnectedSocket.emit(CLIENT_EVENTS.ICE_CANDIDATE, {
+        receiverId: 'user2',
+        candidate: mockCandidate,
+      });
+
+      // Verify candidate is forwarded to peer
+      const candidatePromise = new Promise<any>((resolve) => {
+        clientSocket2.on(SERVER_EVENTS.ICE_CANDIDATE, resolve);
+      });
+
+      const received = await candidatePromise;
+      expect(received.candidate).toEqual(mockCandidate);
+      expect(received.senderId).toBe('user1');
+    });
+  });
+
+  describe('Backward Compatibility', () => {
+    it('should not affect normal call flow without reconnection', async () => {
+      // Test that normal call flow remains unchanged
+      const callInitPromise = new Promise<void>((resolve) => {
+        clientSocket1.emit(CLIENT_EVENTS.CALL_USER, {
+          callerId: 'user1',
+          receiverId: 'user2',
+          offer: { type: 'offer', sdp: 'test-sdp' },
+        }, () => resolve());
+      });
+
+      await callInitPromise;
+
+      // Verify no unexpected recovery events
+      const unexpectedEventPromise = new Promise((resolve, reject) => {
+        clientSocket1.on(SERVER_EVENTS.CALL_STATE, reject);
+        clientSocket1.on(SERVER_EVENTS.CALL_RECOVERED, reject);
+        setTimeout(resolve, 1000);
+      });
+
+      await expect(unexpectedEventPromise).resolves.toBeUndefined();
+    });
+
+    it('should not send call state to new connections without active calls', async () => {
+      // Test that users without active calls don't receive call state
+      const noCallStatePromise = new Promise((resolve, reject) => {
+        clientSocket1.on(SERVER_EVENTS.CALL_STATE, reject);
+        clientSocket1.emit(CLIENT_EVENTS.REGISTER_USER, { userId: 'userWithNoCall' });
+        setTimeout(resolve, 1000);
+      });
+
+      await expect(noCallStatePromise).resolves.toBeUndefined();
+    });
+  });
+});

@@ -24,6 +24,7 @@ export const CLIENT_EVENTS = {
   ICE_CANDIDATE: 'ice-candidate',
   REJECT_CALL: 'reject-call',
   END_CALL: 'end-call',
+  RECOVER_CALL: 'recover-call',
 } as const;
 
 // Server to Client events
@@ -38,6 +39,9 @@ export const SERVER_EVENTS = {
   ONLINE_USERS: 'online-users',
   ERROR: 'error',
   REGISTERED: 'registered',
+  CALL_STATE: 'call-state',
+  CALL_RECOVERED: 'call-recovered',
+  PEER_RECONNECTING: 'peer-reconnecting',
 } as const;
 
 // Call timeout configuration (milliseconds)
@@ -48,6 +52,14 @@ export const CALL_CONFIG = {
   MAX_ICE_CANDIDATES: 50,
   // Grace period before cleaning up call state on disconnect (allows reconnection)
   DISCONNECT_GRACE_MS: 10000,
+  // Time to wait for socket replacement during reconnect
+  SOCKET_REPLACEMENT_TIMEOUT_MS: 5000,
+  // Maximum time allowed for call recovery process to complete
+  RECOVERY_TIMEOUT_MS: 15000,
+  // Interval for periodic stale call cleanup check
+  STALE_CLEANUP_INTERVAL_MS: 60000,
+  // Maximum age of a call in recovery state before marking as stale
+  MAX_RECOVERY_AGE_MS: 30000,
 } as const;
 
 // Error codes for socket errors

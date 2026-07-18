@@ -2,8 +2,8 @@
  * Presence Service
  * 
  * Manages user presence state for video calling.
- * Supports multiple sockets per user for multi-device support.
- * Maps userId ↔ socketIds for real-time user lookup.
+ * Enforces single active socket per user (reconnection replaces previous socket).
+ * Maps userId ↔ socketId for real-time user lookup.
  * 
  * Note: This is an in-memory implementation suitable for single-server deployment.
  * For horizontal scaling, migrate to Redis-backed presence with pub/sub.
@@ -17,7 +17,7 @@ import {
 } from '../utils/videoCall.logger';
 
 // In-memory presence maps
-// userId -> Set<socketId> (supports multiple sockets per user)
+// userId -> Set<socketId> (single socket per user, Set used for consistent API)
 const userToSockets: Map<string, Set<string>> = new Map();
 
 // socketId -> userId (for reverse lookup on disconnect)
@@ -28,9 +28,9 @@ const socketMetadata: Map<string, PresenceUser> = new Map();
 
 /**
  * Register a user with their socket connection
- * Supports multiple sockets per user for multi-device
+ * Handles reconnection by replacing stale sockets
  * 
- * @returns Previous socketId if it's the same socket reconnecting, null otherwise
+ * @returns Previous socketId if replaced, null if new registration
  */
 export const registerUser = (userId: string, socketId: string): string | null => {
   let previousSocketId: string | null = null;
@@ -39,6 +39,7 @@ export const registerUser = (userId: string, socketId: string): string | null =>
   const existingUserId = socketToUser.get(socketId);
   if (existingUserId === userId) {
     // Same user, same socket - this is a duplicate registration, return the socketId
+    logDuplicateRegistration(userId, socketId, socketId);
     return socketId;
   }
 
@@ -48,14 +49,21 @@ export const registerUser = (userId: string, socketId: string): string | null =>
     userSockets = new Set<string>();
     userToSockets.set(userId, userSockets);
   } else {
-    // Check if we're replacing a disconnected socket (for call continuity)
-    // This is different from multi-device - it's for replacing old sockets
-    if (userSockets.size === 1) {
+    // For reconnection handling: Keep only one socket per user
+    // This prevents duplicate socket mappings during reconnect
+    if (userSockets.size > 0) {
+      // Get the first (and should be only) existing socket
       const oldSocketId = Array.from(userSockets)[0];
-      const oldMetadata = socketMetadata.get(oldSocketId);
-      if (oldMetadata) {
-        // Check if old socket is stale (would be handled in videoCall.socket.ts)
-        // For now, we keep both sockets as the disconnect handler will clean up stale ones
+      
+      // Only replace if it's a different socket (not the same connection)
+      if (oldSocketId !== socketId) {
+        previousSocketId = oldSocketId;
+        
+        // Remove old socket from all maps
+        userSockets.delete(oldSocketId);
+        socketToUser.delete(oldSocketId);
+        socketMetadata.delete(oldSocketId);
+        
         logDuplicateRegistration(userId, oldSocketId, socketId);
       }
     }
@@ -215,6 +223,15 @@ export const isFirstSocket = (userId: string): boolean => {
 };
 
 /**
+ * Check if a specific socket belongs to a user
+ * Used to detect stale disconnects during reconnection
+ */
+export const isSocketOwnedByUser = (userId: string, socketId: string): boolean => {
+  const userSockets = userToSockets.get(userId);
+  return userSockets ? userSockets.has(socketId) : false;
+};
+
+/**
  * Clear all presence data
  * Used for testing or server shutdown
  */
@@ -233,6 +250,7 @@ export const presenceService = {
   getAllSocketsByUserId,
   isUserOnline,
   isFirstSocket,
+  isSocketOwnedByUser,
   getUserBySocketId,
   getPresence,
   getOnlineCount,

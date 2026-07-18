@@ -106,6 +106,13 @@ export const endCallSchema = Joi.object({
   receiverId: Joi.string().custom(objectId).required(),
 });
 
+/**
+ * recover-call event
+ */
+export const recoverCallSchema = Joi.object({
+  callRecordId: Joi.string().custom(objectId).required(),
+});
+
 // ============================================
 // Validation Helper
 // ============================================
@@ -175,6 +182,7 @@ export const validators = {
   iceCandidate: createSocketValidator(iceCandidateSchema),
   rejectCall: createSocketValidator(rejectCallSchema),
   endCall: createSocketValidator(endCallSchema),
+  recoverCall: createSocketValidator(recoverCallSchema),
 };
 
 // ============================================
@@ -188,4 +196,5 @@ export const schemas = {
   iceCandidate: iceCandidateSchema,
   rejectCall: rejectCallSchema,
   endCall: endCallSchema,
+  recoverCall: recoverCallSchema,
 };

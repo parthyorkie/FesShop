@@ -21,6 +21,10 @@ import {
   UserPresencePayload,
   OnlineUsersPayload,
   SocketErrorPayload,
+  CallStatePayload,
+  RecoverCallPayload,
+  CallRecoveredPayload,
+  PeerReconnectingPayload,
 } from '../interfaces/videoCall.interface';
 
 // ============================================
@@ -47,6 +51,7 @@ export interface ClientToServerEvents {
   'reject-call': (payload: RejectCallPayload, callback?: (response: { success: boolean; message?: string }) => void) => void;
   'end-call': (payload: EndCallPayload, callback?: (response: { success: boolean; message?: string }) => void) => void;
   'get-online-users': () => void;
+  'recover-call': (payload: RecoverCallPayload, callback?: (response: { success: boolean; message?: string; callState?: CallStatePayload }) => void) => void;
 }
 
 // Events sent from server to client
@@ -61,6 +66,9 @@ export interface ServerToClientEvents {
   'online-users': (payload: OnlineUsersPayload) => void;
   'error': (payload: SocketErrorPayload) => void;
   'registered': (payload: { userId: string; message: string }) => void;
+  'call-state': (payload: CallStatePayload) => void;
+  'call-recovered': (payload: CallRecoveredPayload) => void;
+  'peer-reconnecting': (payload: PeerReconnectingPayload) => void;
 }
 
 // Inter-server events (for Redis adapter scalability)

@@ -105,6 +105,10 @@ export interface SocketErrorPayload {
   details?: Record<string, unknown>;
 }
 
+export interface PeerReconnectingPayload {
+  userId: string;
+}
+
 // ============================================
 // Call History Model Interface
 // ============================================
@@ -159,10 +163,42 @@ export interface ActiveCall {
   startedAt: Date;
   timeoutId?: NodeJS.Timeout;
   disconnectTimeoutId?: NodeJS.Timeout;
+  recoveryTimeoutId?: NodeJS.Timeout;
   answered: boolean;
   /** ICE candidates buffered before call is answered */
   bufferedCandidates: {
     forCaller: BufferedIceCandidate[];
     forReceiver: BufferedIceCandidate[];
   };
+  /** Track last offer/answer for recovery */
+  lastOffer?: RTCSessionDescriptionInit;
+  lastAnswer?: RTCSessionDescriptionInit;
+  /** Guard against duplicate concurrent recovery attempts */
+  recoveryInProgress?: boolean;
+  /** Timestamp when recovery started (for stale detection) */
+  recoveryStartedAt?: Date;
+}
+
+// ============================================
+// Call Recovery Payloads
+// ============================================
+
+export interface CallStatePayload {
+  callRecordId: string;
+  callerId: string;
+  receiverId: string;
+  status: 'PENDING' | 'ANSWERED' | 'COMPLETED';
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+}
+
+export interface RecoverCallPayload {
+  callRecordId: string;
+}
+
+export interface CallRecoveredPayload {
+  callRecordId: string;
+  peerId: string;
+  peerName: string;
+  isReconnecting: boolean;
 }

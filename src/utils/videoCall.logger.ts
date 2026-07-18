@@ -85,6 +85,128 @@ export const logDuplicateRegistration = (userId: string, oldSocketId: string, ne
   });
 };
 
+export const logSocketReplaced = (userId: string, oldSocketId: string, newSocketId: string): void => {
+  log('info', 'Reconnect', 'Socket replaced for reconnection', {
+    userId,
+    oldSocketId,
+    newSocketId
+  });
+};
+
+export const logReconnectDetected = (userId: string, socketId: string): void => {
+  log('info', 'Reconnect', 'User reconnected', {
+    userId,
+    socketId
+  });
+};
+
+export const logStaleDisconnectIgnored = (userId: string, socketId: string): void => {
+  log('info', 'Reconnect', 'Ignoring stale disconnect - user already reconnected', {
+    userId,
+    socketId
+  });
+};
+
+export const logCallRecoveryStarted = (userId: string, callRecordId: string): void => {
+  log('info', 'CallRecovery', 'Active call recovery started', {
+    userId,
+    callRecordId
+  });
+};
+
+export const logCallRecoveryCompleted = (userId: string, callRecordId: string): void => {
+  log('info', 'CallRecovery', 'Active call recovery completed', {
+    userId,
+    callRecordId
+  });
+};
+
+export const logCallRecoveryFailed = (userId: string, callRecordId: string, reason: string): void => {
+  log('warn', 'CallRecovery', `Active call recovery failed - ${reason}`, {
+    userId,
+    callRecordId
+  });
+};
+
+export const logPeerNotifiedOfReconnect = (userId: string, peerId: string, callRecordId: string): void => {
+  log('info', 'CallRecovery', 'Peer notified of reconnection', {
+    userId,
+    targetUserId: peerId,
+    callRecordId
+  });
+};
+
+export const logRecoveryAlreadyInProgress = (userId: string, callRecordId: string): void => {
+  log('warn', 'CallRecovery', 'Duplicate recovery attempt ignored - already in progress', {
+    userId,
+    callRecordId
+  });
+};
+
+export const logCleanupAlreadyCompleted = (context: string, callRecordId: string): void => {
+  log('info', 'Cleanup', 'Idempotent cleanup skipped - already cleaned up', {
+    callRecordId,
+    context
+  });
+};
+
+export const logDisconnectGraceExpired = (userId: string, callRecordId: string): void => {
+  log('info', 'Disconnect', 'Grace period expired - cleaning up call', {
+    userId,
+    callRecordId
+  });
+};
+
+export const logDisconnectGraceCancelled = (userId: string, callRecordId: string): void => {
+  log('info', 'Disconnect', 'Grace period cancelled - user reconnected', {
+    userId,
+    callRecordId
+  });
+};
+
+export const logRecoveryTimeoutStarted = (userId: string, callRecordId: string, timeoutMs: number): void => {
+  log('info', 'Timeout', `Recovery timeout started (${timeoutMs}ms)`, {
+    userId,
+    callRecordId,
+    timeoutMs
+  });
+};
+
+export const logRecoveryTimeoutExpired = (userId: string, callRecordId: string): void => {
+  log('warn', 'Timeout', 'Recovery timeout expired - cleaning up call', {
+    userId,
+    callRecordId
+  });
+};
+
+export const logRecoveryTimeoutCancelled = (userId: string, callRecordId: string): void => {
+  log('info', 'Timeout', 'Recovery timeout cancelled - recovery completed', {
+    userId,
+    callRecordId
+  });
+};
+
+export const logStaleCallDetected = (callRecordId: string, ageMs: number): void => {
+  log('warn', 'Cleanup', `Stale call detected (age: ${ageMs}ms) - cleaning up`, {
+    callRecordId,
+    ageMs
+  });
+};
+
+export const logStaleCleanupRun = (totalCalls: number, staleCalls: number): void => {
+  log('info', 'Cleanup', `Stale call cleanup completed (${staleCalls}/${totalCalls} cleaned)`, {
+    totalCalls,
+    staleCalls
+  });
+};
+
+export const logAllTimersCleaned = (callRecordId: string, timersCleaned: string[]): void => {
+  log('debug', 'Cleanup', `All timers cleaned for call`, {
+    callRecordId,
+    timersCleaned: timersCleaned.join(', ')
+  });
+};
+
 // ============================================
 // Presence Events
 // ============================================
@@ -278,6 +400,9 @@ export const videoCallLogger = {
   logUserRegistered,
   logUserUnregistered,
   logDuplicateRegistration,
+  logSocketReplaced,
+  logReconnectDetected,
+  logStaleDisconnectIgnored,
   logCallInitiated,
   logIncomingCall,
   logCallAnswered,
