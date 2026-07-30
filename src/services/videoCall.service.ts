@@ -10,10 +10,10 @@ import CallHistory from '../models/callHistory.model';
 import { ICallHistory, ICallHistoryCreate } from '../interfaces/videoCall.interface';
 import { CALL_STATUS, CallStatus } from '../constants/videoCall.constants';
 import { createApiError } from '../utils/ApiError';
-import { 
-  logCallRecordCreated, 
-  logCallRecordUpdated, 
-  logDbError 
+import {
+  logCallRecordCreated,
+  logCallRecordUpdated,
+  logDbError
 } from '../utils/videoCall.logger';
 import { getPaginationOptions, formatPaginationData } from '../utils/pagination';
 
@@ -37,9 +37,9 @@ export const createCallRecord = async (
     });
 
     await callRecord.save();
-    
+
     logCallRecordCreated(callRecord._id.toString());
-    
+
     return callRecord;
   } catch (error: any) {
     logDbError('createCallRecord', error.message, {
@@ -52,12 +52,12 @@ export const createCallRecord = async (
 
 /**
  * Mark call as answered
- * Sets answeredAt timestamp and status
+ * Only transitions from MISSED → ANSWERED (monotonic)
  */
 export const markAnswered = async (callId: string): Promise<ICallHistory | null> => {
   try {
-    const callRecord = await CallHistory.findByIdAndUpdate(
-      callId,
+    const callRecord = await CallHistory.findOneAndUpdate(
+      { _id: callId, status: CALL_STATUS.MISSED },
       {
         status: CALL_STATUS.ANSWERED,
         answeredAt: new Date(),
@@ -78,11 +78,12 @@ export const markAnswered = async (callId: string): Promise<ICallHistory | null>
 
 /**
  * Mark call as rejected
+ * Only transitions from MISSED → REJECTED (monotonic)
  */
 export const markRejected = async (callId: string): Promise<ICallHistory | null> => {
   try {
-    const callRecord = await CallHistory.findByIdAndUpdate(
-      callId,
+    const callRecord = await CallHistory.findOneAndUpdate(
+      { _id: callId, status: CALL_STATUS.MISSED },
       {
         status: CALL_STATUS.REJECTED,
         endedAt: new Date(),
@@ -103,12 +104,12 @@ export const markRejected = async (callId: string): Promise<ICallHistory | null>
 
 /**
  * Mark call as missed (timeout without answer)
- * This is the default status, so mainly used for explicit confirmation
+ * Only transitions from MISSED → MISSED (sets endedAt, idempotent)
  */
 export const markMissed = async (callId: string): Promise<ICallHistory | null> => {
   try {
-    const callRecord = await CallHistory.findByIdAndUpdate(
-      callId,
+    const callRecord = await CallHistory.findOneAndUpdate(
+      { _id: callId, status: CALL_STATUS.MISSED },
       {
         status: CALL_STATUS.MISSED,
         endedAt: new Date(),
@@ -129,35 +130,61 @@ export const markMissed = async (callId: string): Promise<ICallHistory | null> =
 
 /**
  * Mark call as completed
- * Calculates duration based on answeredAt and endedAt
+ * Only transitions from ANSWERED → COMPLETED (monotonic)
+ * Atomic: calculates duration in a single findOneAndUpdate
  */
 export const markCompleted = async (callId: string): Promise<ICallHistory | null> => {
   try {
     const now = new Date();
-    
-    // First fetch to get answeredAt for duration calculation
-    const existingRecord = await CallHistory.findById(callId);
-    
-    if (!existingRecord) {
-      return null;
-    }
 
-    let duration: number | undefined;
-    
-    if (existingRecord.answeredAt) {
-      duration = Math.floor(
-        (now.getTime() - existingRecord.answeredAt.getTime()) / 1000
-      );
-    }
+    // Atomic conditional update: only transition ANSWERED → COMPLETED
+    // Use aggregation pipeline to calculate duration from answeredAt
+    // const callRecord = await CallHistory.findOneAndUpdate(
+    //   { _id: callId, status: CALL_STATUS.ANSWERED },
+    //   {
+    //     $set: {
+    //       status: CALL_STATUS.COMPLETED,
+    //       endedAt: now,
+    //       duration: {
+    //         $cond: {
+    //           if: { $ne: ['$answeredAt', null] },
+    //           then: {
+    //             $floor: {
+    //               $divide: [
+    //                 { $subtract: [now, '$answeredAt'] },
+    //                 1000
+    //               ]
+    //             }
+    //           },
+    //           else: null
+    //         }
+    //       }
+    //     }
+    //   },
+    //   { returnDocument: 'after' }
+    // );
 
-    const callRecord = await CallHistory.findByIdAndUpdate(
-      callId,
+    const callRecord = await CallHistory.findOneAndUpdate(
+      { _id: callId, status: CALL_STATUS.ANSWERED },
+      [
+        {
+          $set: {
+            status: CALL_STATUS.COMPLETED,
+            endedAt: now,
+            duration: {
+              $dateDiff: {
+                startDate: "$answeredAt",
+                endDate: now,
+                unit: "second",
+              },
+            },
+          },
+        },
+      ],
       {
-        status: CALL_STATUS.COMPLETED,
-        endedAt: now,
-        ...(duration !== undefined && { duration }),
-      },
-      { returnDocument: 'after' }
+        returnDocument: "after",
+        updatePipeline: true,
+      }
     );
 
     if (callRecord) {
@@ -185,9 +212,9 @@ export const getCallHistory = async (
 ): Promise<{ data: ICallHistory[]; pagination: any }> => {
   try {
     const { page, limit, skip } = getPaginationOptions(query);
-    
+
     const userObjectId = new Types.ObjectId(userId);
-    
+
     // Build filter - user as either caller or receiver
     const filter: Record<string, any> = {
       $or: [
@@ -246,7 +273,7 @@ export const getCallHistoryBetweenUsers = async (
 ): Promise<{ data: ICallHistory[]; pagination: any }> => {
   try {
     const { page, limit, skip } = getPaginationOptions(query);
-    
+
     const user1ObjectId = new Types.ObjectId(userId1);
     const user2ObjectId = new Types.ObjectId(userId2);
 
@@ -269,9 +296,9 @@ export const getCallHistoryBetweenUsers = async (
 
     return { data: data as ICallHistory[], pagination };
   } catch (error: any) {
-    logDbError('getCallHistoryBetweenUsers', error.message, { 
-      userId: userId1, 
-      targetUserId: userId2 
+    logDbError('getCallHistoryBetweenUsers', error.message, {
+      userId: userId1,
+      targetUserId: userId2
     });
     throw createApiError(500, 'Failed to retrieve call history');
   }

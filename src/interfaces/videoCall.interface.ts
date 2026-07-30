@@ -162,8 +162,8 @@ export interface ActiveCall {
   receiverId: string;
   startedAt: Date;
   timeoutId?: NodeJS.Timeout;
-  disconnectTimeoutId?: NodeJS.Timeout;
-  recoveryTimeoutId?: NodeJS.Timeout;
+  /** Single recovery deadline timer — set on disconnect, cleared on reconnect */
+  recoveryDeadlineId?: NodeJS.Timeout;
   answered: boolean;
   /** ICE candidates buffered before call is answered */
   bufferedCandidates: {
@@ -175,8 +175,10 @@ export interface ActiveCall {
   lastAnswer?: RTCSessionDescriptionInit;
   /** Guard against duplicate concurrent recovery attempts */
   recoveryInProgress?: boolean;
-  /** Timestamp when recovery started (for stale detection) */
+  /** Timestamp when disconnect triggered recovery window (for stale detection) */
   recoveryStartedAt?: Date;
+  /** Which user triggered the recovery window */
+  disconnectedUserId?: string;
 }
 
 // ============================================

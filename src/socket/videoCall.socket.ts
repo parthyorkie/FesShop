@@ -62,9 +62,9 @@ import {
   logCleanupAlreadyCompleted,
   logDisconnectGraceExpired,
   logDisconnectGraceCancelled,
-  logRecoveryTimeoutStarted,
-  logRecoveryTimeoutExpired,
-  logRecoveryTimeoutCancelled,
+  logRecoveryDeadlineStarted,
+  logRecoveryDeadlineExpired,
+  logRecoveryDeadlineCancelled,
   logStaleCallDetected,
   logStaleCleanupRun,
   logAllTimersCleaned,
@@ -125,13 +125,9 @@ const clearActiveCall = (callRecordId: string): ActiveCall | null => {
     clearTimeout(activeCall.timeoutId);
     timersCleaned.push('callTimeout');
   }
-  if (activeCall.disconnectTimeoutId) {
-    clearTimeout(activeCall.disconnectTimeoutId);
-    timersCleaned.push('disconnectTimeout');
-  }
-  if (activeCall.recoveryTimeoutId) {
-    clearTimeout(activeCall.recoveryTimeoutId);
-    timersCleaned.push('recoveryTimeout');
+  if (activeCall.recoveryDeadlineId) {
+    clearTimeout(activeCall.recoveryDeadlineId);
+    timersCleaned.push('recoveryDeadline');
   }
 
   // Log timer cleanup for debugging
@@ -152,78 +148,21 @@ const clearActiveCall = (callRecordId: string): ActiveCall | null => {
 };
 
 /**
- * Set up recovery timeout to prevent indefinite recovery state
+ * Cancel the recovery deadline timer (called when user reconnects successfully)
  */
-const setupRecoveryTimeout = (
-  io: TypedServer,
-  callRecordId: string,
-  userId: string
-): void => {
-  const activeCall = activeCalls.get(callRecordId);
-  if (!activeCall) return;
-
-  // Clear any existing recovery timeout
-  if (activeCall.recoveryTimeoutId) {
-    clearTimeout(activeCall.recoveryTimeoutId);
-  }
-
-  logRecoveryTimeoutStarted(userId, callRecordId, CALL_CONFIG.RECOVERY_TIMEOUT_MS);
-
-  const recoveryTimeoutId = setTimeout(async () => {
-    // Idempotent: verify call still exists
-    const currentCall = activeCalls.get(callRecordId);
-    if (!currentCall) {
-      logCleanupAlreadyCompleted('recovery-timeout', callRecordId);
-      return;
-    }
-
-    logRecoveryTimeoutExpired(userId, callRecordId);
-
-    // Atomically claim cleanup responsibility
-    const cleanedCall = clearActiveCall(callRecordId);
-    if (!cleanedCall) return;
-
-    // Determine the peer
-    const peerId = cleanedCall.callerId === userId 
-      ? cleanedCall.receiverId 
-      : cleanedCall.callerId;
-
-    // Mark call as completed if it was answered, otherwise let existing timeout handle it
-    if (cleanedCall.answered) {
-      await videoCallService.markCompleted(callRecordId);
-    }
-
-    // Notify peer about call ending due to recovery timeout
-    const peerSocketId = presenceService.getSocketByUserId(peerId);
-    if (peerSocketId) {
-      const peerSocket = getSocketById(io, peerSocketId);
-      if (peerSocket) {
-        peerSocket.emit(SERVER_EVENTS.CALL_ENDED, {
-          endedBy: userId,
-          reason: 'Recovery timeout - call ended',
-        });
-      }
-    }
-  }, CALL_CONFIG.RECOVERY_TIMEOUT_MS);
-
-  activeCall.recoveryTimeoutId = recoveryTimeoutId;
-  activeCall.recoveryStartedAt = new Date();
-};
-
-/**
- * Cancel recovery timeout after successful recovery
- */
-const cancelRecoveryTimeout = (activeCall: ActiveCall, userId: string): void => {
-  if (activeCall.recoveryTimeoutId) {
-    clearTimeout(activeCall.recoveryTimeoutId);
-    activeCall.recoveryTimeoutId = undefined;
+const cancelRecoveryDeadline = (activeCall: ActiveCall, userId: string): void => {
+  if (activeCall.recoveryDeadlineId) {
+    clearTimeout(activeCall.recoveryDeadlineId);
+    activeCall.recoveryDeadlineId = undefined;
     activeCall.recoveryStartedAt = undefined;
-    logRecoveryTimeoutCancelled(userId, activeCall.callRecordId);
+    activeCall.disconnectedUserId = undefined;
+    logRecoveryDeadlineCancelled(userId, activeCall.callRecordId);
   }
 };
 
 /**
- * Handle call recovery when user reconnects during an active call
+ * Handle call recovery when user reconnects during an active call.
+ * The recovery deadline timer has already been cancelled by the caller.
  */
 const handleCallRecoveryOnReconnect = async (
   io: TypedServer,
@@ -231,18 +170,17 @@ const handleCallRecoveryOnReconnect = async (
   user: SocketUser,
   activeCall: ActiveCall
 ): Promise<void> => {
+  const callRecordId = activeCall.callRecordId;
+
   // Guard: prevent duplicate concurrent recovery attempts
   if (activeCall.recoveryInProgress) {
-    logRecoveryAlreadyInProgress(user.id, activeCall.callRecordId);
+    logRecoveryAlreadyInProgress(user.id, callRecordId);
     return;
   }
   activeCall.recoveryInProgress = true;
 
-  // Set up recovery timeout to prevent indefinite recovery state
-  setupRecoveryTimeout(io, activeCall.callRecordId, user.id);
-
   try {
-    logCallRecoveryStarted(user.id, activeCall.callRecordId);
+    logCallRecoveryStarted(user.id, callRecordId);
     
     // Determine the peer in the call
     const peerId = activeCall.callerId === user.id 
@@ -251,16 +189,28 @@ const handleCallRecoveryOnReconnect = async (
     
     // Get peer user data
     const peerUser = await User.findById(peerId).select('name');
+
+    // --- Post-await validation (Race 2 & 3) ---
+    // Call may have been ended/rejected/cleaned during the await
+    if (!activeCalls.has(callRecordId)) {
+      logCallRecoveryFailed(user.id, callRecordId, 'Call ended during recovery');
+      return;
+    }
+    // Socket may have been replaced by a newer connection during the await
+    const currentSocketId = presenceService.getSocketByUserId(user.id);
+    if (currentSocketId !== socket.id) {
+      logCallRecoveryFailed(user.id, callRecordId, 'Socket replaced during recovery');
+      return;
+    }
+
     if (!peerUser) {
-      logCallRecoveryFailed(user.id, activeCall.callRecordId, 'Peer not found');
-      // Cancel recovery timeout since we're failing
-      cancelRecoveryTimeout(activeCall, user.id);
+      logCallRecoveryFailed(user.id, callRecordId, 'Peer not found');
       return;
     }
     
     // Build call state payload
     const callState: CallStatePayload = {
-      callRecordId: activeCall.callRecordId,
+      callRecordId,
       callerId: activeCall.callerId,
       receiverId: activeCall.receiverId,
       status: activeCall.answered ? 'ANSWERED' : 'PENDING',
@@ -277,24 +227,19 @@ const handleCallRecoveryOnReconnect = async (
       const peerSocket = getSocketById(io, peerSocketId);
       if (peerSocket) {
         const recoveryPayload: CallRecoveredPayload = {
-          callRecordId: activeCall.callRecordId,
+          callRecordId,
           peerId: user.id,
           peerName: user.name,
           isReconnecting: true,
         };
         peerSocket.emit(SERVER_EVENTS.CALL_RECOVERED, recoveryPayload);
-        logPeerNotifiedOfReconnect(user.id, peerId, activeCall.callRecordId);
+        logPeerNotifiedOfReconnect(user.id, peerId, callRecordId);
       }
     }
     
-    logCallRecoveryCompleted(user.id, activeCall.callRecordId);
-    
-    // Cancel recovery timeout since recovery completed successfully
-    cancelRecoveryTimeout(activeCall, user.id);
+    logCallRecoveryCompleted(user.id, callRecordId);
   } catch (error: any) {
-    logCallRecoveryFailed(user.id, activeCall.callRecordId, error.message);
-    // Cancel recovery timeout on error
-    cancelRecoveryTimeout(activeCall, user.id);
+    logCallRecoveryFailed(user.id, callRecordId, error.message);
   } finally {
     activeCall.recoveryInProgress = false;
   }
@@ -391,11 +336,8 @@ const handleRegisterUser = async (
   if (callRecordId) {
     const activeCall = activeCalls.get(callRecordId);
     if (activeCall) {
-      // Cancel the disconnect grace period if it exists
-      if (activeCall.disconnectTimeoutId) {
-        clearTimeout(activeCall.disconnectTimeoutId);
-        activeCall.disconnectTimeoutId = undefined;
-      }
+      // Cancel the recovery deadline — user reconnected in time
+      cancelRecoveryDeadline(activeCall, user.id);
       
       logReconnectDetected(user.id, socket.id);
       
@@ -601,9 +543,16 @@ const handleAnswerCall = async (
     }
 
     const activeCall = activeCalls.get(callRecordId);
-    if (!activeCall || activeCall.callerId !== callerId) {
+    if (!activeCall) {
       emitError(socket, SOCKET_ERROR_CODES.CALL_FAILED, 'Call not found');
       callback?.({ success: false, message: 'Call not found' });
+      return;
+    }
+
+    // SECURITY: Verify user is the actual receiver and callerId matches
+    if (activeCall.receiverId !== user.id || activeCall.callerId !== callerId) {
+      emitError(socket, SOCKET_ERROR_CODES.UNAUTHORIZED, 'Not authorized to answer this call');
+      callback?.({ success: false, message: 'Unauthorized' });
       return;
     }
 
@@ -684,27 +633,45 @@ const handleIceCandidate = (
 
   // Check if there's an active call and whether it's been answered
   const callRecordId = userToActiveCall.get(user.id);
-  if (callRecordId) {
-    const activeCall = activeCalls.get(callRecordId);
-    if (activeCall && !activeCall.answered) {
-      // Buffer ICE candidates until the call is answered
-      const candidateData: BufferedIceCandidate = { senderId: user.id, candidate };
-      const targetBuffer = receiverId === activeCall.callerId 
-        ? activeCall.bufferedCandidates.forCaller 
-        : activeCall.bufferedCandidates.forReceiver;
-
-      if (targetBuffer.length >= CALL_CONFIG.MAX_ICE_CANDIDATES) {
-        logSocketError(socket.id, CLIENT_EVENTS.ICE_CANDIDATE, `Max ICE candidates (${CALL_CONFIG.MAX_ICE_CANDIDATES}) reached`, user.id);
-        return;
-      }
-
-      targetBuffer.push(candidateData);
-      logIceCandidate(user.id, receiverId);
-      return;
-    }
+  if (!callRecordId) {
+    // No active call for this user - ignore
+    return;
   }
 
-  // Call is answered or no active call - forward immediately
+  const activeCall = activeCalls.get(callRecordId);
+  if (!activeCall) {
+    // Call already ended - ignore
+    return;
+  }
+
+  // SECURITY: Verify receiverId is the actual peer in this call
+  const actualPeerId = activeCall.callerId === user.id 
+    ? activeCall.receiverId 
+    : activeCall.callerId;
+  
+  if (receiverId !== actualPeerId) {
+    logSocketError(socket.id, CLIENT_EVENTS.ICE_CANDIDATE, `Unauthorized receiverId: ${receiverId}`, user.id);
+    return;
+  }
+
+  if (!activeCall.answered) {
+    // Buffer ICE candidates until the call is answered
+    const candidateData: BufferedIceCandidate = { senderId: user.id, candidate };
+    const targetBuffer = receiverId === activeCall.callerId 
+      ? activeCall.bufferedCandidates.forCaller 
+      : activeCall.bufferedCandidates.forReceiver;
+
+    if (targetBuffer.length >= CALL_CONFIG.MAX_ICE_CANDIDATES) {
+      logSocketError(socket.id, CLIENT_EVENTS.ICE_CANDIDATE, `Max ICE candidates (${CALL_CONFIG.MAX_ICE_CANDIDATES}) reached`, user.id);
+      return;
+    }
+
+    targetBuffer.push(candidateData);
+    logIceCandidate(user.id, receiverId);
+    return;
+  }
+
+  // Call is answered - forward immediately
   const receiverSocketId = presenceService.getSocketByUserId(receiverId);
   if (!receiverSocketId) {
     return; // Silent fail - receiver may have disconnected
@@ -746,27 +713,41 @@ const handleRejectCall = async (
   try {
     // Find active call (idempotent cleanup)
     const callRecordId = userToActiveCall.get(user.id);
-    if (callRecordId) {
-      // Atomically claim cleanup responsibility
-      const cleanedCall = clearActiveCall(callRecordId);
-      if (cleanedCall) {
-        // Update call record to rejected
-        await videoCallService.markRejected(callRecordId);
+    if (!callRecordId) {
+      // No active call - already rejected or ended
+      callback?.({ success: true, message: 'No active call to reject' });
+      return;
+    }
 
-        // Notify caller of rejection
-        const callerSocketId = presenceService.getSocketByUserId(callerId);
-        if (callerSocketId) {
-          const callerSocket = getSocketById(io, callerSocketId);
-          if (callerSocket) {
-            callerSocket.emit(SERVER_EVENTS.CALL_REJECTED, {
-              receiverId: user.id,
-              reason: 'Call rejected by user',
-            });
-          }
-        }
-      } else {
-        logCleanupAlreadyCompleted('reject-call', callRecordId);
+    const activeCall = activeCalls.get(callRecordId);
+    if (activeCall) {
+      // SECURITY: Verify user is the actual receiver and callerId matches
+      if (activeCall.receiverId !== user.id || activeCall.callerId !== callerId) {
+        emitError(socket, SOCKET_ERROR_CODES.UNAUTHORIZED, 'Not authorized to reject this call');
+        callback?.({ success: false, message: 'Unauthorized' });
+        return;
       }
+    }
+
+    // Atomically claim cleanup responsibility
+    const cleanedCall = clearActiveCall(callRecordId);
+    if (cleanedCall) {
+      // Update call record to rejected
+      await videoCallService.markRejected(callRecordId);
+
+      // Notify actual caller of rejection (already validated)
+      const callerSocketId = presenceService.getSocketByUserId(callerId);
+      if (callerSocketId) {
+        const callerSocket = getSocketById(io, callerSocketId);
+        if (callerSocket) {
+          callerSocket.emit(SERVER_EVENTS.CALL_REJECTED, {
+            receiverId: user.id,
+            reason: 'Call rejected by user',
+          });
+        }
+      }
+    } else {
+      logCleanupAlreadyCompleted('reject-call', callRecordId);
     }
 
     logCallRejected(callerId, user.id, callRecordId);
@@ -804,29 +785,48 @@ const handleEndCall = async (
   try {
     // Find and complete active call (idempotent cleanup)
     const callRecordId = userToActiveCall.get(user.id);
+    if (!callRecordId) {
+      // No active call to end
+      callback?.({ success: true, message: 'No active call to end' });
+      return;
+    }
+
     let duration: number | undefined;
 
-    if (callRecordId) {
-      // Atomically claim cleanup responsibility
-      const cleanedCall = clearActiveCall(callRecordId);
-      if (cleanedCall) {
-        const callRecord = await videoCallService.markCompleted(callRecordId);
-        duration = callRecord?.duration ?? undefined;
-
-        // Notify other participant
-        const otherSocketId = presenceService.getSocketByUserId(otherUserId);
-        if (otherSocketId) {
-          const otherSocket = getSocketById(io, otherSocketId);
-          if (otherSocket) {
-            otherSocket.emit(SERVER_EVENTS.CALL_ENDED, {
-              endedBy: user.id,
-              reason: 'Call ended by user',
-            });
-          }
-        }
-      } else {
-        logCleanupAlreadyCompleted('end-call', callRecordId);
+    const activeCall = activeCalls.get(callRecordId);
+    if (activeCall) {
+      // SECURITY: Verify user is part of the call and otherUserId is the peer
+      const isAuthorized = (
+        (activeCall.callerId === user.id && activeCall.receiverId === otherUserId) ||
+        (activeCall.receiverId === user.id && activeCall.callerId === otherUserId)
+      );
+      
+      if (!isAuthorized) {
+        emitError(socket, SOCKET_ERROR_CODES.UNAUTHORIZED, 'Not authorized to end this call');
+        callback?.({ success: false, message: 'Unauthorized' });
+        return;
       }
+    }
+
+    // Atomically claim cleanup responsibility
+    const cleanedCall = clearActiveCall(callRecordId);
+    if (cleanedCall) {
+      const callRecord = await videoCallService.markCompleted(callRecordId);
+      duration = callRecord?.duration ?? undefined;
+
+      // Notify actual peer (already validated)
+      const otherSocketId = presenceService.getSocketByUserId(otherUserId);
+      if (otherSocketId) {
+        const otherSocket = getSocketById(io, otherSocketId);
+        if (otherSocket) {
+          otherSocket.emit(SERVER_EVENTS.CALL_ENDED, {
+            endedBy: user.id,
+            reason: 'Call ended by user',
+          });
+        }
+      }
+    } else {
+      logCleanupAlreadyCompleted('end-call', callRecordId);
     }
 
     logCallEnded(user.id, otherUserId, callRecordId, duration);
@@ -883,8 +883,8 @@ const handleRecoverCall = async (
     }
     activeCall.recoveryInProgress = true;
     
-    // Set up recovery timeout to prevent indefinite recovery state
-    setupRecoveryTimeout(io, callRecordId, user.id);
+    // Cancel the recovery deadline — user is recovering now
+    cancelRecoveryDeadline(activeCall, user.id);
     
     logCallRecoveryStarted(user.id, callRecordId);
     
@@ -900,6 +900,9 @@ const handleRecoverCall = async (
       offer: activeCall.lastOffer,
       answer: activeCall.lastAnswer,
     };
+    
+    // Send call state to reconnected user (consistent with automatic recovery)
+    socket.emit(SERVER_EVENTS.CALL_STATE, callState);
     
     // Notify peer about recovery
     const peerId = activeCall.callerId === user.id 
@@ -923,17 +926,13 @@ const handleRecoverCall = async (
     
     logCallRecoveryCompleted(user.id, callRecordId);
     
-    // Cancel recovery timeout since recovery completed successfully
-    cancelRecoveryTimeout(activeCall, user.id);
-    
     activeCall.recoveryInProgress = false;
     callback?.({ success: true, message: 'Call recovered', callState });
     
   } catch (error: any) {
-    // Reset recovery flag and cancel timeout if call still exists
+    // Reset recovery flag if call still exists
     const activeCall = activeCalls.get(payload.callRecordId);
     if (activeCall) {
-      cancelRecoveryTimeout(activeCall, user.id);
       activeCall.recoveryInProgress = false;
     }
     
@@ -995,20 +994,27 @@ const handleDisconnect = async (
     if (callRecordId) {
       const activeCall = activeCalls.get(callRecordId);
       if (activeCall) {
-        // Grant a grace period for reconnection before cleaning up the call
-        // This prevents call termination on brief network disruptions
-        const disconnectTimeout = setTimeout(async () => {
+        // Clear any existing recovery deadline (other participant may have already disconnected)
+        if (activeCall.recoveryDeadlineId) {
+          clearTimeout(activeCall.recoveryDeadlineId);
+        }
+
+        // Set the single recovery deadline — call stays alive for the full window
+        // If user reconnects within RECOVERY_WINDOW_MS, the deadline is cancelled
+        const recoveryDeadlineId = setTimeout(async () => {
           // Idempotency guard: call may have been cleaned up by end/reject/timeout
           if (!activeCalls.has(callRecordId)) {
-            logCleanupAlreadyCompleted('disconnect-grace', callRecordId);
+            logCleanupAlreadyCompleted('recovery-deadline', callRecordId);
             return;
           }
 
-          // Re-check if user reconnected during grace period
+          // Re-check if user reconnected during recovery window
           const reconnectedSocketId = presenceService.getSocketByUserId(user.id);
           if (reconnectedSocketId) {
             logDisconnectGraceCancelled(user.id, callRecordId);
-            activeCall.disconnectTimeoutId = undefined;
+            activeCall.recoveryDeadlineId = undefined;
+            activeCall.recoveryStartedAt = undefined;
+            activeCall.disconnectedUserId = undefined;
             return;
           }
 
@@ -1023,10 +1029,9 @@ const handleDisconnect = async (
             ? cleanedCall.receiverId 
             : cleanedCall.callerId;
 
-          const callRecord = await videoCallService.getCallById(callRecordId);
-          if (callRecord?.status === 'ANSWERED') {
-            await videoCallService.markCompleted(callRecordId);
-          }
+          // markCompleted is now conditional (ANSWERED → COMPLETED only)
+          // If still MISSED, this is a no-op — correct behavior
+          await videoCallService.markCompleted(callRecordId);
 
           // Notify other participant
           const otherSocketId = presenceService.getSocketByUserId(otherUserId);
@@ -1045,9 +1050,13 @@ const handleDisconnect = async (
             userId: user.id,
             userName: user.name,
           });
-        }, CALL_CONFIG.DISCONNECT_GRACE_MS);
+        }, CALL_CONFIG.RECOVERY_WINDOW_MS);
 
-        activeCall.disconnectTimeoutId = disconnectTimeout;
+        activeCall.recoveryDeadlineId = recoveryDeadlineId;
+        activeCall.recoveryStartedAt = new Date();
+        activeCall.disconnectedUserId = user.id;
+        
+        logRecoveryDeadlineStarted(user.id, callRecordId, CALL_CONFIG.RECOVERY_WINDOW_MS);
         
         // Notify peer about reconnect grace period
         const otherUserId = activeCall.callerId === user.id 
@@ -1064,15 +1073,9 @@ const handleDisconnect = async (
         }
 
         // Remove stale socket from presence but keep call state alive
-        const removalResult = presenceService.removeBySocketId(socket.id);
-        
-        // Only emit USER_OFFLINE if this was the user's last socket
-        if (removalResult.userOffline) {
-          // Deferred offline broadcast (will be cancelled if user reconnects)
-          // Note: This is included in the timeout to allow cancellation during grace period
-        }
+        presenceService.removeBySocketId(socket.id);
 
-        logDisconnect(user.id, socket.id, `${reason} (grace period started)`);
+        logDisconnect(user.id, socket.id, `${reason} (recovery window started: ${CALL_CONFIG.RECOVERY_WINDOW_MS}ms)`);
         return;
       }
     }

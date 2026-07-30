@@ -50,15 +50,11 @@ export const CALL_CONFIG = {
   CALL_TIMEOUT_MS: 30000,
   // Maximum ICE candidates to store temporarily
   MAX_ICE_CANDIDATES: 50,
-  // Grace period before cleaning up call state on disconnect (allows reconnection)
-  DISCONNECT_GRACE_MS: 10000,
-  // Time to wait for socket replacement during reconnect
-  SOCKET_REPLACEMENT_TIMEOUT_MS: 5000,
-  // Maximum time allowed for call recovery process to complete
-  RECOVERY_TIMEOUT_MS: 15000,
+  // Recovery window: how long to keep call state alive after disconnect (allows reconnection)
+  RECOVERY_WINDOW_MS: 30000,
   // Interval for periodic stale call cleanup check
   STALE_CLEANUP_INTERVAL_MS: 60000,
-  // Maximum age of a call in recovery state before marking as stale
+  // Maximum age of a call in recovery state before marking as stale (safety net)
   MAX_RECOVERY_AGE_MS: 30000,
 } as const;
 

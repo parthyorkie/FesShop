@@ -164,23 +164,23 @@ export const logDisconnectGraceCancelled = (userId: string, callRecordId: string
   });
 };
 
-export const logRecoveryTimeoutStarted = (userId: string, callRecordId: string, timeoutMs: number): void => {
-  log('info', 'Timeout', `Recovery timeout started (${timeoutMs}ms)`, {
+export const logRecoveryDeadlineStarted = (userId: string, callRecordId: string, windowMs: number): void => {
+  log('info', 'Recovery', `Recovery window started (${windowMs}ms)`, {
     userId,
     callRecordId,
-    timeoutMs
+    windowMs
   });
 };
 
-export const logRecoveryTimeoutExpired = (userId: string, callRecordId: string): void => {
-  log('warn', 'Timeout', 'Recovery timeout expired - cleaning up call', {
+export const logRecoveryDeadlineExpired = (userId: string, callRecordId: string): void => {
+  log('warn', 'Recovery', 'Recovery window expired - cleaning up call', {
     userId,
     callRecordId
   });
 };
 
-export const logRecoveryTimeoutCancelled = (userId: string, callRecordId: string): void => {
-  log('info', 'Timeout', 'Recovery timeout cancelled - recovery completed', {
+export const logRecoveryDeadlineCancelled = (userId: string, callRecordId: string): void => {
+  log('info', 'Recovery', 'Recovery window cancelled - user reconnected', {
     userId,
     callRecordId
   });
