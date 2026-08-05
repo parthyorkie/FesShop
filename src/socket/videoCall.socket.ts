@@ -70,6 +70,11 @@ import {
   logAllTimersCleaned,
 } from '../utils/videoCall.logger';
 import User from '../models/User';
+import { incrementCounter } from '../services/counter.service';
+import { CounterPayload } from './counter.types';
+import { logger } from '../utils/logger';
+import { COUNTER_EVENTS } from './counter.events';
+import { registerCounterSocket } from './counter.socket';
 
 // ============================================
 // Active Calls Tracking (in-memory)
@@ -184,8 +189,8 @@ const setupRecoveryTimeout = (
     if (!cleanedCall) return;
 
     // Determine the peer
-    const peerId = cleanedCall.callerId === userId 
-      ? cleanedCall.receiverId 
+    const peerId = cleanedCall.callerId === userId
+      ? cleanedCall.receiverId
       : cleanedCall.callerId;
 
     // Mark call as completed if it was answered, otherwise let existing timeout handle it
@@ -243,12 +248,12 @@ const handleCallRecoveryOnReconnect = async (
 
   try {
     logCallRecoveryStarted(user.id, activeCall.callRecordId);
-    
+
     // Determine the peer in the call
-    const peerId = activeCall.callerId === user.id 
-      ? activeCall.receiverId 
+    const peerId = activeCall.callerId === user.id
+      ? activeCall.receiverId
       : activeCall.callerId;
-    
+
     // Get peer user data
     const peerUser = await User.findById(peerId).select('name');
     if (!peerUser) {
@@ -257,7 +262,7 @@ const handleCallRecoveryOnReconnect = async (
       cancelRecoveryTimeout(activeCall, user.id);
       return;
     }
-    
+
     // Build call state payload
     const callState: CallStatePayload = {
       callRecordId: activeCall.callRecordId,
@@ -267,10 +272,10 @@ const handleCallRecoveryOnReconnect = async (
       offer: activeCall.lastOffer,
       answer: activeCall.lastAnswer,
     };
-    
+
     // Send call state to reconnected user
     socket.emit(SERVER_EVENTS.CALL_STATE, callState);
-    
+
     // Notify peer about reconnection if they are online
     const peerSocketId = presenceService.getSocketByUserId(peerId);
     if (peerSocketId) {
@@ -286,9 +291,9 @@ const handleCallRecoveryOnReconnect = async (
         logPeerNotifiedOfReconnect(user.id, peerId, activeCall.callRecordId);
       }
     }
-    
+
     logCallRecoveryCompleted(user.id, activeCall.callRecordId);
-    
+
     // Cancel recovery timeout since recovery completed successfully
     cancelRecoveryTimeout(activeCall, user.id);
   } catch (error: any) {
@@ -319,7 +324,7 @@ const setupCallTimeout = (
 
     // Mark as missed in database
     await videoCallService.markMissed(callRecordId);
-    
+
     // Notify caller that call was not answered
     const callerSocketId = presenceService.getSocketByUserId(callerId);
     if (callerSocketId) {
@@ -366,10 +371,10 @@ const handleRegisterUser = async (
   socket: TypedSocket
 ) => {
   const user = getSocketUser(socket);
-  
+
   // Check if this is the user's first socket BEFORE registering
   const wasOnline = presenceService.isUserOnline(user.id);
-  
+
   // Register user in presence service (handles reconnection)
   const previousSocketId = presenceService.registerUser(user.id, socket.id);
 
@@ -382,7 +387,7 @@ const handleRegisterUser = async (
       emitError(previousSocket, SOCKET_ERROR_CODES.UNAUTHORIZED, 'Replaced by new connection');
       previousSocket.disconnect(true);
     }
-    
+
     logSocketReplaced(user.id, previousSocketId, socket.id);
   }
 
@@ -396,9 +401,9 @@ const handleRegisterUser = async (
         clearTimeout(activeCall.disconnectTimeoutId);
         activeCall.disconnectTimeoutId = undefined;
       }
-      
+
       logReconnectDetected(user.id, socket.id);
-      
+
       // Start call recovery process
       await handleCallRecoveryOnReconnect(io, socket, user, activeCall);
     }
@@ -508,13 +513,13 @@ const handleCallUser = async (
       });
 
       logCallInitiated(callerId, receiverId, callRecordId);
-      
+
       // Mark as missed since receiver can't answer
       await videoCallService.markMissed(callRecordId);
-      
+
       userToActiveCall.delete(callerId);
       userToActiveCall.delete(receiverId);
-      
+
       emitError(socket, SOCKET_ERROR_CODES.USER_OFFLINE, 'User is offline. Notification sent.');
       callback?.({ success: false, message: 'User is offline. Notification sent.', callRecordId });
       return;
@@ -689,8 +694,8 @@ const handleIceCandidate = (
     if (activeCall && !activeCall.answered) {
       // Buffer ICE candidates until the call is answered
       const candidateData: BufferedIceCandidate = { senderId: user.id, candidate };
-      const targetBuffer = receiverId === activeCall.callerId 
-        ? activeCall.bufferedCandidates.forCaller 
+      const targetBuffer = receiverId === activeCall.callerId
+        ? activeCall.bufferedCandidates.forCaller
         : activeCall.bufferedCandidates.forReceiver;
 
       if (targetBuffer.length >= CALL_CONFIG.MAX_ICE_CANDIDATES) {
@@ -849,7 +854,7 @@ const handleRecoverCall = async (
   callback?: (response: { success: boolean; message?: string; callState?: CallStatePayload }) => void
 ) => {
   const user = getSocketUser(socket);
-  
+
   // Validate payload
   const validation = validateSocketPayload(schemas.recoverCall, payload);
   if (!validation.valid) {
@@ -858,17 +863,17 @@ const handleRecoverCall = async (
     callback?.({ success: false, message: validation.errors!.join(', ') });
     return;
   }
-  
+
   try {
     const { callRecordId } = validation.value as RecoverCallPayload;
-    
+
     // Check if there's an active call with this ID
     const activeCall = activeCalls.get(callRecordId);
     if (!activeCall) {
       callback?.({ success: false, message: 'No active call found' });
       return;
     }
-    
+
     // Verify user is part of this call
     if (activeCall.callerId !== user.id && activeCall.receiverId !== user.id) {
       callback?.({ success: false, message: 'Not authorized for this call' });
@@ -882,15 +887,15 @@ const handleRecoverCall = async (
       return;
     }
     activeCall.recoveryInProgress = true;
-    
+
     // Set up recovery timeout to prevent indefinite recovery state
     setupRecoveryTimeout(io, callRecordId, user.id);
-    
+
     logCallRecoveryStarted(user.id, callRecordId);
-    
+
     // Restore user mapping
     userToActiveCall.set(user.id, callRecordId);
-    
+
     // Build call state
     const callState: CallStatePayload = {
       callRecordId,
@@ -900,12 +905,12 @@ const handleRecoverCall = async (
       offer: activeCall.lastOffer,
       answer: activeCall.lastAnswer,
     };
-    
+
     // Notify peer about recovery
-    const peerId = activeCall.callerId === user.id 
-      ? activeCall.receiverId 
+    const peerId = activeCall.callerId === user.id
+      ? activeCall.receiverId
       : activeCall.callerId;
-    
+
     const peerSocketId = presenceService.getSocketByUserId(peerId);
     if (peerSocketId) {
       const peerSocket = getSocketById(io, peerSocketId);
@@ -920,15 +925,15 @@ const handleRecoverCall = async (
         logPeerNotifiedOfReconnect(user.id, peerId, callRecordId);
       }
     }
-    
+
     logCallRecoveryCompleted(user.id, callRecordId);
-    
+
     // Cancel recovery timeout since recovery completed successfully
     cancelRecoveryTimeout(activeCall, user.id);
-    
+
     activeCall.recoveryInProgress = false;
     callback?.({ success: true, message: 'Call recovered', callState });
-    
+
   } catch (error: any) {
     // Reset recovery flag and cancel timeout if call still exists
     const activeCall = activeCalls.get(payload.callRecordId);
@@ -936,7 +941,7 @@ const handleRecoverCall = async (
       cancelRecoveryTimeout(activeCall, user.id);
       activeCall.recoveryInProgress = false;
     }
-    
+
     logCallRecoveryFailed(user.id, payload.callRecordId, error.message);
     callback?.({ success: false, message: 'Failed to recover call' });
   }
@@ -949,15 +954,15 @@ const handleGetOnlineUsers = (
   socket: TypedSocket
 ) => {
   const user = getSocketUser(socket);
-  
+
   // Get all online user IDs from presence service
   const userIds = presenceService.getAllOnlineUserIds();
-  
+
   // Send response
   socket.emit(SERVER_EVENTS.ONLINE_USERS, {
     userIds
   });
-  
+
   logOnlineUsersRequested(socket.id, user.id);
   logCurrentOnlineCount(userIds.length);
 };
@@ -979,7 +984,7 @@ const handleDisconnect = async (
   // Check if this socket still belongs to the user
   // If not, this is a stale disconnect from a replaced socket
   const isOwnedByUser = presenceService.isSocketOwnedByUser(user.id, socket.id);
-  
+
   if (!isOwnedByUser) {
     // This socket was already replaced during reconnection
     logStaleDisconnectIgnored(user.id, socket.id);
@@ -1019,8 +1024,8 @@ const handleDisconnect = async (
           if (!cleanedCall) return;
 
           // User did not reconnect — clean up the call
-          const otherUserId = cleanedCall.callerId === user.id 
-            ? cleanedCall.receiverId 
+          const otherUserId = cleanedCall.callerId === user.id
+            ? cleanedCall.receiverId
             : cleanedCall.callerId;
 
           const callRecord = await videoCallService.getCallById(callRecordId);
@@ -1048,10 +1053,10 @@ const handleDisconnect = async (
         }, CALL_CONFIG.DISCONNECT_GRACE_MS);
 
         activeCall.disconnectTimeoutId = disconnectTimeout;
-        
+
         // Notify peer about reconnect grace period
-        const otherUserId = activeCall.callerId === user.id 
-          ? activeCall.receiverId 
+        const otherUserId = activeCall.callerId === user.id
+          ? activeCall.receiverId
           : activeCall.callerId;
         const otherSocketId = presenceService.getSocketByUserId(otherUserId);
         if (otherSocketId) {
@@ -1065,7 +1070,7 @@ const handleDisconnect = async (
 
         // Remove stale socket from presence but keep call state alive
         const removalResult = presenceService.removeBySocketId(socket.id);
-        
+
         // Only emit USER_OFFLINE if this was the user's last socket
         if (removalResult.userOffline) {
           // Deferred offline broadcast (will be cancelled if user reconnects)
@@ -1093,6 +1098,37 @@ const handleDisconnect = async (
   logDisconnect(user.id, socket.id, reason);
 };
 
+
+let timer: NodeJS.Timeout | null = null;
+
+export const startCounterEmitter = (
+  io: Server
+): void => {
+
+  if (timer) {
+    return;
+  }
+
+  timer = setInterval(() => {
+
+    const value = incrementCounter();
+
+    const payload: CounterPayload = {
+      value,
+    };
+
+    logger.info(
+      `Counter : ${value}`
+    );
+
+    io.emit(
+      COUNTER_EVENTS.UPDATE,
+      payload
+    );
+
+  }, 2000);
+
+};
 // ============================================
 // Stale Call Cleanup
 // ============================================
@@ -1132,7 +1168,7 @@ const cleanupStaleCalls = async (io: TypedServer): Promise<void> => {
 
     if (isStale) {
       staleCalls.push(callRecordId);
-      
+
       // Atomically claim cleanup responsibility
       const cleanedCall = clearActiveCall(callRecordId);
       if (cleanedCall) {
@@ -1201,10 +1237,16 @@ export const initializeVideoCallSocket = (
   // Apply authentication middleware
   io.use(socketAuthMiddleware);
 
+  // start counter emitter
+  startCounterEmitter(io);
+
   // Handle new connections
   io.on('connection', (socket: TypedSocket) => {
     const user = getSocketUser(socket);
     logConnection(user.id, socket.id, user.name);
+
+    // register counter socket events
+    registerCounterSocket(io, socket);
 
     // Auto-register user on connection
     handleRegisterUser(io, socket);
@@ -1237,7 +1279,7 @@ export const initializeVideoCallSocket = (
     socket.on(CLIENT_EVENTS.GET_ONLINE_USERS, () => {
       handleGetOnlineUsers(socket);
     });
-    
+
     socket.on(CLIENT_EVENTS.RECOVER_CALL, (payload, callback) => {
       handleRecoverCall(io, socket, payload, callback);
     });
@@ -1257,7 +1299,7 @@ export const initializeVideoCallSocket = (
   if (staleCleanupInterval) {
     clearInterval(staleCleanupInterval);
   }
-  
+
   staleCleanupInterval = setInterval(() => {
     cleanupStaleCalls(io).catch(error => {
       logSocketError('system', 'stale-cleanup', error.message);
