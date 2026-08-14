@@ -21,7 +21,9 @@ import orderRoutes from "./routes/order.routes";
 import productRoutes from "./routes/product.routes";
 import sectionRoutes from "./routes/section.routes";
 import userRoutes from "./routes/user.routes";
-import console from "console";
+import chatRoutes from "./routes/chat.routes";
+import { initializeSocket } from "./services/socket.service";
+// import { initializeSocket } from "./services/socket.service";
 
 const app = express();
 const httpServer = createServer(app);
@@ -47,8 +49,9 @@ app.use('/api/products', productRoutes);
 app.use("/api/festivals", festivalRoutes);
 app.use("/api/companies", companyRoutes);
 app.use('/api/users', userRoutes);
-app.use("/api/sections", sectionRoutes); 
+app.use("/api/sections", sectionRoutes);
 app.use("/api/orders", orderRoutes); // Importing order routes here to avoid circular dependency with order.model.ts
+app.use("/api/chat", chatRoutes);
 
 // Global 404 handler
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -62,9 +65,9 @@ logger.info('Starting server...');
 
 // Connect DB and Start Server
 connectDB().then(() => {
-  // Initialize Socket.IO for WebRTC signaling
-  const io = initializeVideoCallSocket(httpServer, CORS_ORIGINS);
-  logger.info('[Socket.IO] Video call signaling initialized');
+  // Initialize Socket.IO (Chat, VideoCall signaling, Counter)
+  const io = initializeSocket(httpServer, CORS_ORIGINS);
+  logger.info('[Socket.IO] Socket server initialized');
 
   // Start HTTP server (includes both Express and Socket.IO)
   httpServer.listen(PORT, '0.0.0.0', () => {

@@ -10,21 +10,21 @@ const API_URL = 'http://localhost:3000';
 async function getTestTokens() {
     try {
         console.log('Getting test JWT tokens...\n');
-        
+
         // Test user 1
         const user1 = {
             email: 'testuser1@example.com',
             password: 'Test@123456',
             name: 'Test User 1'
         };
-        
+
         // Test user 2
         const user2 = {
-            email: 'testuser2@example.com',
-            password: 'Test@123456',
-            name: 'Test User 2'
+            email: 'parth@york.ie',
+            password: '123456',
+            name: 'parth'
         };
-        
+
         // Try to login or register user 1
         let token1;
         try {
@@ -32,20 +32,20 @@ async function getTestTokens() {
                 email: user1.email,
                 password: user1.password
             });
-            token1 = loginResponse1.data.token;
+            token1 = loginResponse1.data.data.accessToken;
             console.log('✓ User 1 logged in successfully');
         } catch (error) {
             // If login fails, try to register
             try {
                 const registerResponse1 = await axios.post(`${API_URL}/api/auth/register`, user1);
-                token1 = registerResponse1.data.token;
-                console.log('✓ User 1 registered successfully');
+                token1 = registerResponse1.data.data.accessToken;
+                console.log('✓ User 1 registered successfully', registerResponse1.data.data.accessToken);
             } catch (regError) {
                 console.error('Failed to login/register user 1:', regError.response?.data || regError.message);
                 return;
             }
         }
-        
+
         // Try to login or register user 2
         let token2;
         try {
@@ -53,17 +53,17 @@ async function getTestTokens() {
                 email: user2.email,
                 password: user2.password
             });
-            token2 = loginResponse2.data.token;
+            token2 = loginResponse2.data.data.accessToken;
             console.log('✓ User 2 logged in successfully');
         } catch (error) {
             // If login fails, try to register
             try {
                 const registerResponse2 = await axios.post(`${API_URL}/api/auth/register`, user2);
-                token2 = registerResponse2.data.token;
-                console.log('✓ User 2 registered successfully');
+                token2 = registerResponse2.data.data.accessToken;
+                console.log('✓ User 2 registered successfully', registerResponse2.data.data.accessToken);
             } catch (regError) {
                 // If registration fails due to existing user, try login again with the password
-                if (regError.response?.data?.message === 'User exists') {
+                if (regError.response?.data?.message === 'User already exists') {
                     try {
                         const loginResponse2 = await axios.post(`${API_URL}/api/auth/login`, {
                             email: user2.email,
@@ -82,7 +82,7 @@ async function getTestTokens() {
                 }
             }
         }
-        
+
         console.log('\n' + '='.repeat(60));
         console.log('TEST JWT TOKENS:');
         console.log('='.repeat(60));
@@ -101,7 +101,7 @@ async function getTestTokens() {
         console.log('\nnode test-call-recovery.js');
         console.log('\nOr with tokens directly:');
         console.log(`\nJWT_USER1="${token1}" JWT_USER2="${token2}" node test-call-recovery.js`);
-        
+
     } catch (error) {
         console.error('Error:', error.message);
     }
