@@ -1,7 +1,7 @@
 import { TypedServer, TypedSocket } from '../types/socket.types';
 import { getSocketUser } from '../middlewares/socketAuth.middleware';
 import * as chatService from '../services/chat.service';
-import { socketMessageSchema } from '../validations/chat.validation';
+import { socketMessageSchema, socketMessageStatusSchema, socketReactionSchema } from '../validations/chat.validation';
 import { logger } from '../utils/logger';
 
 /**
@@ -145,6 +145,136 @@ export const registerChatSocket = (io: TypedServer, socket: TypedSocket): void =
       if (callback) {
         callback({ success: false, message: error.message || 'Failed to send message' });
       }
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // Event: message:delivered
+  // --------------------------------------------------------------------------
+  socket.on('message:delivered', async (payload: { conversationId: string; messageId: string }, callback?: (response: { success: boolean; message?: string }) => void) => {
+    try {
+      const { error, value } = socketMessageStatusSchema.validate(payload);
+      if (error) {
+        const msg = error.details[0]?.message || 'Invalid payload';
+        emitChatError(socket, 400, msg);
+        if (callback) callback({ success: false, message: msg });
+        return;
+      }
+
+      const { conversationId, messageId } = value;
+      const res = await chatService.markMessageDelivered(conversationId, messageId, user.id);
+      if (res.changed) {
+        io.to((res.message as any).senderId.toString()).emit('message:delivered', {
+          conversationId,
+          messageId,
+          readerId: user.id,
+          deliveredAt: new Date(),
+        });
+      }
+
+      if (callback) callback({ success: true });
+    } catch (err: any) {
+      logger.warn(`[Chat Socket] message:delivered failed for user ${user.id}: ${err.message}`);
+      emitChatError(socket, err.statusCode || 400, err.message || 'Failed to mark delivered');
+      if (callback) callback({ success: false, message: err.message || 'Failed to mark delivered' });
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // Event: message:read
+  // --------------------------------------------------------------------------
+  socket.on('message:read', async (payload: { conversationId: string; messageId: string }, callback?: (response: { success: boolean; message?: string }) => void) => {
+    try {
+      const { error, value } = socketMessageStatusSchema.validate(payload);
+      if (error) {
+        const msg = error.details[0]?.message || 'Invalid payload';
+        emitChatError(socket, 400, msg);
+        if (callback) callback({ success: false, message: msg });
+        return;
+      }
+
+      const { conversationId, messageId } = value;
+      const res = await chatService.markMessageRead(conversationId, messageId, user.id);
+      if (res.changed) {
+        io.to((res.message as any).senderId.toString()).emit('message:read', {
+          conversationId,
+          messageId,
+          readerId: user.id,
+          readAt: new Date(),
+        });
+      }
+
+      if (callback) callback({ success: true });
+    } catch (err: any) {
+      logger.warn(`[Chat Socket] message:read failed for user ${user.id}: ${err.message}`);
+      emitChatError(socket, err.statusCode || 400, err.message || 'Failed to mark read');
+      if (callback) callback({ success: false, message: err.message || 'Failed to mark read' });
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // Event: reaction:add
+  // --------------------------------------------------------------------------
+  socket.on('reaction:add', async (payload: { conversationId: string; messageId: string; emoji: string }, callback?: (response: { success: boolean; message?: string }) => void) => {
+    try {
+      const { error, value } = socketReactionSchema.validate(payload);
+      if (error) {
+        const msg = error.details[0]?.message || 'Invalid payload';
+        emitChatError(socket, 400, msg);
+        if (callback) callback({ success: false, message: msg });
+        return;
+      }
+
+      const { conversationId, messageId, emoji } = value;
+      const res = await chatService.addReaction(conversationId, messageId, user.id, emoji);
+      if (res && res.reaction) {
+        io.to(conversationId).emit('reaction:added', {
+          conversationId,
+          messageId,
+          reaction: {
+            userId: res.reaction.userId.toString(),
+            emoji: res.reaction.emoji,
+            createdAt: res.reaction.createdAt,
+          }
+        });
+      }
+
+      if (callback) callback({ success: true });
+    } catch (err: any) {
+      logger.warn(`[Chat Socket] reaction:add failed for user ${user.id}: ${err.message}`);
+      emitChatError(socket, err.statusCode || 400, err.message || 'Failed to add reaction');
+      if (callback) callback({ success: false, message: err.message || 'Failed to add reaction' });
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // Event: reaction:remove
+  // --------------------------------------------------------------------------
+  socket.on('reaction:remove', async (payload: { conversationId: string; messageId: string }, callback?: (response: { success: boolean; message?: string }) => void) => {
+    try {
+      const { error, value } = socketMessageStatusSchema.validate(payload);
+      if (error) {
+        const msg = error.details[0]?.message || 'Invalid payload';
+        emitChatError(socket, 400, msg);
+        if (callback) callback({ success: false, message: msg });
+        return;
+      }
+
+      const { conversationId, messageId } = value;
+      const res = await chatService.removeReactionService(conversationId, messageId, user.id);
+      if (res && res.removed) {
+        io.to(conversationId).emit('reaction:removed', {
+          conversationId,
+          messageId,
+          userId: user.id,
+        });
+      }
+
+      if (callback) callback({ success: true });
+    } catch (err: any) {
+      logger.warn(`[Chat Socket] reaction:remove failed for user ${user.id}: ${err.message}`);
+      emitChatError(socket, err.statusCode || 400, err.message || 'Failed to remove reaction');
+      if (callback) callback({ success: false, message: err.message || 'Failed to remove reaction' });
     }
   });
 };

@@ -69,3 +69,59 @@ export const updateConversationLastMessage = async (
 export const findMessageByClientMessageId = async (clientMessageId: string, senderId: string): Promise<IMessage | null> => {
   return Message.findOne({ clientMessageId, senderId } as any);
 };
+
+export const getMessageById = async (messageId: string): Promise<IMessage | null> => {
+  return Message.findById(messageId).exec();
+};
+
+export const updateMessageStatusIfChanged = async (
+  messageId: string,
+  conversationId: string,
+  newStatus: 'sent' | 'delivered' | 'read'
+): Promise<boolean> => {
+  const filter: any = { _id: messageId, conversationId };
+  // Only update if status differs
+  filter.status = { $ne: newStatus };
+
+  const res = await Message.updateOne(filter, { $set: { status: newStatus, updatedAt: new Date() } }).exec();
+  return !!(res.modifiedCount && res.modifiedCount > 0);
+};
+
+export const addOrUpdateReaction = async (
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<{ action: 'added' | 'updated'; reaction?: any } | null> => {
+  const now = new Date();
+
+  // Try to update existing reaction
+  const updated = await Message.findOneAndUpdate(
+    ({ _id: messageId, 'reactions.userId': userId } as any),
+    ({ $set: { 'reactions.$.emoji': emoji, 'reactions.$.createdAt': now } } as any),
+    ({ new: true } as any)
+  ).select('reactions').exec();
+
+  if (updated) {
+    const reaction = ((updated as any).reactions as any[]).find((r: any) => r.userId.toString() === userId);
+    return { action: 'updated', reaction };
+  }
+
+  // Add new reaction
+  const pushed = await Message.findOneAndUpdate(
+    ({ _id: messageId } as any),
+    ({ $push: { reactions: { userId: userId as any, emoji, createdAt: now } } } as any),
+    ({ new: true } as any)
+  ).select('reactions').exec();
+
+  if (pushed) {
+    const reaction = ((pushed as any).reactions as any[]).find((r: any) => r.userId.toString() === userId);
+    return { action: 'added', reaction };
+  }
+
+  return null;
+};
+
+export const removeReaction = async (messageId: string, userId: string): Promise<boolean> => {
+  const res = await Message.updateOne({ _id: messageId }, { $pull: { reactions: { userId } } }).exec();
+  return !!(res.modifiedCount && res.modifiedCount > 0);
+};

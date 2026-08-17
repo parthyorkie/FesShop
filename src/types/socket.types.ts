@@ -55,6 +55,10 @@ export interface ClientToServerEvents {
   'chat:join': (payload: { conversationId: string }, callback?: (response: { success: boolean; message?: string }) => void) => void;
   'chat:leave': (payload: { conversationId: string }, callback?: (response: { success: boolean; message?: string }) => void) => void;
   'message:send': (payload: { conversationId: string; clientMessageId: string; type: string; text: string }, callback?: (response: { success: boolean; message?: string }) => void) => void;
+  'message:delivered': (payload: { conversationId: string; messageId: string }, callback?: (response: { success: boolean; message?: string }) => void) => void;
+  'message:read': (payload: { conversationId: string; messageId: string }, callback?: (response: { success: boolean; message?: string }) => void) => void;
+  'reaction:add': (payload: { conversationId: string; messageId: string; emoji: string }, callback?: (response: { success: boolean; message?: string }) => void) => void;
+  'reaction:remove': (payload: { conversationId: string; messageId: string }, callback?: (response: { success: boolean; message?: string }) => void) => void;
 }
 
 // Events sent from server to client
@@ -83,6 +87,10 @@ export interface ServerToClientEvents {
     createdAt: Date | string;
     updatedAt: Date | string;
   }) => void;
+  'message:delivered': (payload: { conversationId: string; messageId: string; readerId: string; deliveredAt: Date | string }) => void;
+  'message:read': (payload: { conversationId: string; messageId: string; readerId: string; readAt: Date | string }) => void;
+  'reaction:added': (payload: { conversationId: string; messageId: string; reaction: { userId: string; emoji: string; createdAt: Date | string } }) => void;
+  'reaction:removed': (payload: { conversationId: string; messageId: string; userId: string }) => void;
   'chat:error': (payload: { code: string | number; message: string; details?: Record<string, unknown> }) => void;
 }
 

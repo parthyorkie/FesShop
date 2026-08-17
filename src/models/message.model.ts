@@ -7,7 +7,11 @@ export interface IMessage extends Document {
   type: 'text' | 'voice' | 'media';
   text?: string;
   media?: string;
-  reactions?: any[];
+  reactions?: Array<{
+    userId: Schema.Types.ObjectId;
+    emoji: string;
+    createdAt: Date;
+  }>;
   status: 'sent' | 'delivered' | 'read';
   createdAt: Date;
   updatedAt: Date;
@@ -42,7 +46,13 @@ const messageSchema = new Schema<IMessage>(
       type: String,
     },
     reactions: {
-      type: [Schema.Types.Mixed],
+      type: [
+        {
+          userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+          emoji: { type: String, required: true },
+          createdAt: { type: Date, default: Date.now },
+        }
+      ],
       default: [],
     },
     status: {
@@ -58,5 +68,6 @@ const messageSchema = new Schema<IMessage>(
 // Indexes
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 messageSchema.index({ clientMessageId: 1, senderId: 1 }, { unique: true });
+messageSchema.index({ 'reactions.userId': 1 });
 
 export default model<IMessage>("Message", messageSchema);

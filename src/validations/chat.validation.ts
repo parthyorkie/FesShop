@@ -42,3 +42,14 @@ export const socketMessageSchema = Joi.object({
   type: Joi.string().valid('text').required(),
   text: Joi.string().required().max(2000),
 }).unknown(false);
+
+export const socketMessageStatusSchema = Joi.object({
+  conversationId: Joi.string().required().custom(objectId),
+  messageId: Joi.string().required().custom(objectId),
+}).unknown(false);
+
+export const socketReactionSchema = Joi.object({
+  conversationId: Joi.string().required().custom(objectId),
+  messageId: Joi.string().required().custom(objectId),
+  emoji: Joi.string().min(1).max(8).required(),
+}).unknown(false);

@@ -14,6 +14,12 @@ import { findUserById } from '../repositories/user.repository';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
 import { logger } from '../utils/logger';
+import {
+  getMessageById,
+  updateMessageStatusIfChanged,
+  addOrUpdateReaction,
+  removeReaction,
+} from '../repositories/chat.repository';
 
 export const createConversation = async (userId: string, participantId: string): Promise<IConversation> => {
   if (userId === participantId) {
@@ -109,4 +115,70 @@ export const sendTextMessage = async (
     }
     throw error;
   }
+};
+
+export const markMessageDelivered = async (conversationId: string, messageId: string, userId: string) => {
+  // Validate membership
+  await validateConversationMembership(conversationId, userId);
+
+  const message = await getMessageById(messageId);
+  if (!message) throw createApiError(404, 'Message not found');
+
+  if (message.conversationId.toString() !== conversationId) {
+    throw createApiError(400, 'Message does not belong to the conversation');
+  }
+
+  // Only recipients (not the sender) can mark delivered
+  if (message.senderId.toString() === userId) {
+    throw createApiError(403, 'Sender cannot mark their own message as delivered');
+  }
+
+  const changed = await updateMessageStatusIfChanged(messageId, conversationId, 'delivered');
+  return { changed, message };
+};
+
+export const markMessageRead = async (conversationId: string, messageId: string, userId: string) => {
+  await validateConversationMembership(conversationId, userId);
+
+  const message = await getMessageById(messageId);
+  if (!message) throw createApiError(404, 'Message not found');
+
+  if (message.conversationId.toString() !== conversationId) {
+    throw createApiError(400, 'Message does not belong to the conversation');
+  }
+
+  if (message.senderId.toString() === userId) {
+    throw createApiError(403, 'Sender cannot mark their own message as read');
+  }
+
+  const changed = await updateMessageStatusIfChanged(messageId, conversationId, 'read');
+  return { changed, message };
+};
+
+export const addReaction = async (conversationId: string, messageId: string, userId: string, emoji: string) => {
+  await validateConversationMembership(conversationId, userId);
+
+  const message = await getMessageById(messageId);
+  if (!message) throw createApiError(404, 'Message not found');
+  if (message.conversationId.toString() !== conversationId) {
+    throw createApiError(400, 'Message does not belong to the conversation');
+  }
+
+  // Add or update reaction
+  const res = await addOrUpdateReaction(messageId, userId, emoji);
+  if (!res) throw createApiError(500, 'Failed to add reaction');
+  return res;
+};
+
+export const removeReactionService = async (conversationId: string, messageId: string, userId: string) => {
+  await validateConversationMembership(conversationId, userId);
+
+  const message = await getMessageById(messageId);
+  if (!message) throw createApiError(404, 'Message not found');
+  if (message.conversationId.toString() !== conversationId) {
+    throw createApiError(400, 'Message does not belong to the conversation');
+  }
+
+  const removed = await removeReaction(messageId, userId);
+  return { removed };
 };
