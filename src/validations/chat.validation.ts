@@ -39,8 +39,22 @@ export const getMessagesSchema = {
 export const socketMessageSchema = Joi.object({
   conversationId: Joi.string().required().custom(objectId),
   clientMessageId: Joi.string().required().max(100),
-  type: Joi.string().valid('text').required(),
-  text: Joi.string().required().max(2000),
+  type: Joi.string().valid('text', 'voice').required(),
+  text: Joi.when('type', {
+    is: 'text',
+    then: Joi.string().required().max(2000),
+    otherwise: Joi.forbidden(),
+  }),
+  voice: Joi.when('type', {
+    is: 'voice',
+    then: Joi.object({
+      url: Joi.string().required(),
+      duration: Joi.number().required().positive(),
+      mimeType: Joi.string().required().valid('audio/m4a'),
+      size: Joi.number().required().positive(),
+    }).required(),
+    otherwise: Joi.forbidden(),
+  }),
 }).unknown(false);
 
 export const socketMessageStatusSchema = Joi.object({
@@ -53,3 +67,11 @@ export const socketReactionSchema = Joi.object({
   messageId: Joi.string().required().custom(objectId),
   emoji: Joi.string().min(1).max(8).required(),
 }).unknown(false);
+
+export const presignedUrlSchema = {
+  body: Joi.object().keys({
+    conversationId: Joi.string().required().custom(objectId),
+    mimeType: Joi.string().required().valid('audio/m4a'),
+    size: Joi.number().required().positive(),
+  }).unknown(false),
+};

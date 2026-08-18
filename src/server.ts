@@ -52,6 +52,10 @@ app.use('/api/users', userRoutes);
 app.use("/api/sections", sectionRoutes);
 app.use("/api/orders", orderRoutes); // Importing order routes here to avoid circular dependency with order.model.ts
 app.use("/api/chat", chatRoutes);
+// Health check endpoint
+app.get('/api/health', (_req, res) => {
+  res.sendStatus(200);
+});
 
 // Global 404 handler
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -61,17 +65,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Global Error Handler
 app.use(errorHandler);
 
-logger.info('Starting server...');
+const startServer = () => {
+  logger.info('Starting server...');
 
-// Connect DB and Start Server
-connectDB().then(() => {
-  // Initialize Socket.IO (Chat, VideoCall signaling, Counter)
-  const io = initializeSocket(httpServer, CORS_ORIGINS);
-  logger.info('[Socket.IO] Socket server initialized');
+  connectDB().then(() => {
+    // Initialize Socket.IO (Chat, VideoCall signaling, Counter)
+    const io = initializeSocket(httpServer, CORS_ORIGINS);
+    logger.info('[Socket.IO] Socket server initialized');
 
-  // Start HTTP server (includes both Express and Socket.IO)
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    logger.info(`Server listening on http://localhost:${PORT}`);
-    logger.info(`[Socket.IO] WebSocket server ready`);
+    // Start HTTP server (includes both Express and Socket.IO)
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      logger.info(`Server listening on http://localhost:${PORT}`);
+      logger.info(`[Socket.IO] WebSocket server ready`);
+    });
   });
-});
+};
+
+if (process.env.NODE_ENV !== 'test' && require.main === module) {
+  startServer();
+} else if (process.env.NODE_ENV === 'test') {
+  logger.info('Skipping HTTP server startup in test environment');
+}
+
+// Export the Express app for tests
+export { app, startServer, httpServer };
+export default app;

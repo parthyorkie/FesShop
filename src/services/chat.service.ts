@@ -14,6 +14,10 @@ import { findUserById } from '../repositories/user.repository';
 import { IConversation } from '../models/conversation.model';
 import { IMessage } from '../models/message.model';
 import { logger } from '../utils/logger';
+import { v4 as uuidv4 } from 'uuid';
+import { s3Client, S3_BUCKET } from '../config/s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import {
   getMessageById,
   updateMessageStatusIfChanged,
@@ -115,6 +119,97 @@ export const sendTextMessage = async (
     }
     throw error;
   }
+};
+
+export const sendVoiceMessage = async (
+  conversationId: string,
+  senderId: string,
+  clientMessageId: string,
+  voiceMeta: { url: string; duration: number; mimeType: string; size: number }
+): Promise<IMessage> => {
+  await validateConversationMembership(conversationId, senderId);
+
+  try {
+    const existingMessage = await findMessageByClientMessageId(clientMessageId, senderId);
+    if (existingMessage) {
+      return existingMessage;
+    }
+
+    const message = await createMessage({
+      conversationId: conversationId as any,
+      senderId: senderId as any,
+      clientMessageId,
+      type: 'voice',
+      voice: {
+        url: voiceMeta.url,
+        mimeType: voiceMeta.mimeType,
+        duration: voiceMeta.duration,
+        size: voiceMeta.size,
+      },
+    });
+
+    await updateConversationLastMessage(conversationId, (message as any)._id.toString(), message.createdAt);
+    return message;
+  } catch (error: any) {
+    if (error.code === 11000) {
+      const existingMessage = await findMessageByClientMessageId(clientMessageId, senderId);
+      if (existingMessage) {
+        return existingMessage;
+      }
+    }
+    throw error;
+  }
+};
+
+// export const generatePresignedUrl = async (
+//   conversationId: string,
+//   userId: string,
+//   mimeType: string,
+//   size: number,
+//   keyPrefix?: string
+// ): Promise<{ uploadUrl: string; key: string }> => {
+//   // Use a stable auth-derived prefix for object keys when supplied so the media path
+//   // does not expose the raw database user id while still validating with the real ID.
+//   const ext = mimeType.split('/').pop();
+//   const prefix = keyPrefix || userId;
+//   const key = `chat/voice/${prefix}/${conversationId}/${uuidv4()}.${ext}`;
+//   const uploadUrl = `https://dummy.s3.amazonaws.com/${key}`;
+//   return { uploadUrl, key };
+// };
+
+export const generatePresignedUrl = async (
+  conversationId: string,
+  userId: string,
+  mimeType: string,
+  size: number,
+  keyPrefix?: string
+): Promise<{ uploadUrl: string; key: string }> => {
+  const ext = mimeType.split('/').pop();
+
+  const prefix = keyPrefix || userId;
+
+  const key = `chat/voice/${prefix}/${conversationId}/${uuidv4()}.${ext}`;
+
+  console.log(`Generating presigned URL for key: ${key}`);
+  const command = new PutObjectCommand({
+    Bucket: S3_BUCKET!,
+    Key: key,
+    ContentType: mimeType,
+    // ContentLength: size,
+  });
+
+  console.log(`Command for presigned URL: ${JSON.stringify(command)}`);
+
+  const uploadUrl = await getSignedUrl(s3Client, command, {
+    expiresIn: 900, // 15 minutes
+  });
+
+  console.log(`Generated presigned URL: ${uploadUrl}`);
+
+  return {
+    uploadUrl,
+    key,
+  };
 };
 
 export const markMessageDelivered = async (conversationId: string, messageId: string, userId: string) => {

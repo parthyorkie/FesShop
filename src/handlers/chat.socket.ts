@@ -98,55 +98,76 @@ export const registerChatSocket = (io: TypedServer, socket: TypedSocket): void =
   // --------------------------------------------------------------------------
   // Event: message:send
   // --------------------------------------------------------------------------
-  socket.on('message:send', async (payload: { conversationId: string; clientMessageId: string; type: string; text: string }, callback?: (response: { success: boolean; message?: string }) => void) => {
-    try {
-      // Validate payload schema using Joi
-      const { error, value } = socketMessageSchema.validate(payload);
-      if (error) {
-        const errorMsg = error.details[0]?.message || 'Invalid message payload';
-        emitChatError(socket, 400, errorMsg);
-        if (callback) callback({ success: false, message: errorMsg });
-        return;
+  socket.on(
+    'message:send',
+    async (
+      payload: {
+        conversationId: string;
+        clientMessageId: string;
+        type: string;
+        text?: string;
+        voice?: { url: string; duration: number; mimeType: string; size: number };
+      },
+      callback?: (response: { success: boolean; message?: string }) => void
+    ) => {
+      try {
+        // Validate payload schema using Joi
+        const { error, value } = socketMessageSchema.validate(payload);
+        if (error) {
+          const errorMsg = error.details[0]?.message || 'Invalid message payload';
+          emitChatError(socket, 400, errorMsg);
+          if (callback) callback({ success: false, message: errorMsg });
+          return;
+        }
+
+        const { conversationId, clientMessageId, type } = value;
+        let message: any = "";
+        if (type === 'text') {
+          const { text } = value as any;
+          message = await chatService.sendTextMessage(
+            conversationId,
+            user.id,
+            clientMessageId,
+            text
+          );
+        } else if (type === 'voice') {
+          const { voice } = value as any;
+          message = await chatService.sendVoiceMessage(
+            conversationId,
+            user.id,
+            clientMessageId,
+            voice
+          );
+        }
+
+        const messagePayload = {
+          messageId: (message as any)._id.toString(),
+          conversationId: message.conversationId.toString(),
+          senderId: message.senderId.toString(),
+          clientMessageId: message.clientMessageId,
+          type: message.type,
+          text: message.text,
+          status: message.status,
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+        };
+
+        // Emit to all sockets in the conversation room
+        io.to(conversationId).emit('message:new', messagePayload);
+
+        logger.info(`[Chat Socket] Message ${messagePayload.messageId} sent by ${user.id} to conversation ${conversationId}`);
+
+        if (callback) {
+          callback({ success: true });
+        }
+      } catch (error: any) {
+        logger.warn(`[Chat Socket] message:send failed for user ${user.id}: ${error.message}`);
+        emitChatError(socket, error.statusCode || 400, error.message || 'Failed to send message');
+        if (callback) {
+          callback({ success: false, message: error.message || 'Failed to send message' });
+        }
       }
-
-      const { conversationId, clientMessageId, text } = value;
-
-      // STRICT REQUIREMENT: Save message to DB & update conversation before emitting message:new
-      const message = await chatService.sendTextMessage(
-        conversationId,
-        user.id,
-        clientMessageId,
-        text
-      );
-
-      const messagePayload = {
-        messageId: (message as any)._id.toString(),
-        conversationId: message.conversationId.toString(),
-        senderId: message.senderId.toString(),
-        clientMessageId: message.clientMessageId,
-        type: message.type,
-        text: message.text,
-        status: message.status,
-        createdAt: message.createdAt,
-        updatedAt: message.updatedAt,
-      };
-
-      // Emit to all sockets in the conversation room
-      io.to(conversationId).emit('message:new', messagePayload);
-
-      logger.info(`[Chat Socket] Message ${messagePayload.messageId} sent by ${user.id} to conversation ${conversationId}`);
-
-      if (callback) {
-        callback({ success: true });
-      }
-    } catch (error: any) {
-      logger.warn(`[Chat Socket] message:send failed for user ${user.id}: ${error.message}`);
-      emitChatError(socket, error.statusCode || 400, error.message || 'Failed to send message');
-      if (callback) {
-        callback({ success: false, message: error.message || 'Failed to send message' });
-      }
-    }
-  });
+    });
 
   // --------------------------------------------------------------------------
   // Event: message:delivered

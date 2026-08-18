@@ -7,6 +7,7 @@ import {
   getConversationsSchema,
   getConversationSchema,
   getMessagesSchema,
+  presignedUrlSchema,
 } from '../validations/chat.validation';
 
 const router = Router();
@@ -35,6 +36,13 @@ router.get(
   '/conversations/:conversationId/messages',
   validate(getMessagesSchema),
   chatController.getMessageHistory
+);
+
+// Generate presigned URL for voice upload
+router.post(
+  '/media/presigned-url',
+  validate(presignedUrlSchema),
+  chatController.createPresignedUrlHandler
 );
 
 export default router;

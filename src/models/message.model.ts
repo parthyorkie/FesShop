@@ -7,6 +7,13 @@ export interface IMessage extends Document {
   type: 'text' | 'voice' | 'media';
   text?: string;
   media?: string;
+  // Optional voice metadata if type is voice
+  voice?: {
+    url?: string; // S3 key reference
+    mimeType?: string;
+    duration?: number;
+    size?: number;
+  };
   reactions?: Array<{
     userId: Schema.Types.ObjectId;
     emoji: string;
@@ -45,6 +52,18 @@ const messageSchema = new Schema<IMessage>(
     media: {
       type: String,
     },
+    voice: {
+      type: new Schema(
+        {
+          url: { type: String },
+          mimeType: { type: String },
+          duration: { type: Number },
+          size: { type: Number },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
     reactions: {
       type: [
         {
@@ -66,8 +85,8 @@ const messageSchema = new Schema<IMessage>(
 );
 
 // Indexes
-messageSchema.index({ conversationId: 1, createdAt: -1 });
-messageSchema.index({ clientMessageId: 1, senderId: 1 }, { unique: true });
-messageSchema.index({ 'reactions.userId': 1 });
+  messageSchema.index({ conversationId: 1, createdAt: -1 });
+  messageSchema.index({ clientMessageId: 1, senderId: 1 }, { unique: true });
+  messageSchema.index({ 'reactions.userId': 1 });
 
 export default model<IMessage>("Message", messageSchema);
