@@ -52,6 +52,7 @@ export const getMessages = async (conversationId: string, limit: number, cursor?
 
 export const createMessage = async (messageData: Partial<IMessage>): Promise<IMessage> => {
   const message = new Message(messageData);
+  console.log("message voice save", message)
   return message.save();
 };
 

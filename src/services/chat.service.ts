@@ -17,7 +17,7 @@ import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { s3Client, S3_BUCKET } from '../config/s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import {
   getMessageById,
   updateMessageStatusIfChanged,
@@ -130,6 +130,8 @@ export const sendVoiceMessage = async (
   await validateConversationMembership(conversationId, senderId);
 
   try {
+
+    console.log("voiceMeta : ", voiceMeta);
     const existingMessage = await findMessageByClientMessageId(clientMessageId, senderId);
     if (existingMessage) {
       return existingMessage;
@@ -204,14 +206,38 @@ export const generatePresignedUrl = async (
     expiresIn: 900, // 15 minutes
   });
 
-  console.log(`Generated presigned URL: ${uploadUrl}`);
-
+  getPlaybackUrl(key).then((res) => {
+    console.log(`Playback URL for key ${key}: ${res.playbackUrl}`);
+  }).catch((err) => {
+    console.error(`Error generating playback URL for key ${key}:`, err);
+  });
   return {
     uploadUrl,
     key,
   };
 };
 
+
+export const getPlaybackUrl = async (
+  keyPrefix?: string
+): Promise<{ playbackUrl: string }> => {
+
+  const command = new GetObjectCommand({
+    Bucket: S3_BUCKET!,
+    Key: keyPrefix,
+
+  });
+
+  const uploadUrl = await getSignedUrl(s3Client, command, {
+    expiresIn: 7200, // 2 hours
+  });
+
+  console.log(`Playback presigned URL: ${uploadUrl}`);
+
+  return {
+    playbackUrl: uploadUrl,
+  };
+};
 export const markMessageDelivered = async (conversationId: string, messageId: string, userId: string) => {
   // Validate membership
   await validateConversationMembership(conversationId, userId);

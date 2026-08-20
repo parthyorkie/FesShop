@@ -45,4 +45,9 @@ router.post(
   chatController.createPresignedUrlHandler
 );
 
+router.post(
+  '/media/playback-url',
+  chatController.getPlaybackUrlHandler
+);
+
 export default router;

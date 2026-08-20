@@ -111,6 +111,7 @@ export const registerChatSocket = (io: TypedServer, socket: TypedSocket): void =
       callback?: (response: { success: boolean; message?: string }) => void
     ) => {
       try {
+        console.log("Message Payload : ", payload);
         // Validate payload schema using Joi
         const { error, value } = socketMessageSchema.validate(payload);
         if (error) {
@@ -138,6 +139,8 @@ export const registerChatSocket = (io: TypedServer, socket: TypedSocket): void =
             clientMessageId,
             voice
           );
+
+          console.log("Message Data : ", message);
         }
 
         const messagePayload = {
@@ -155,6 +158,7 @@ export const registerChatSocket = (io: TypedServer, socket: TypedSocket): void =
         // Emit to all sockets in the conversation room
         io.to(conversationId).emit('message:new', messagePayload);
 
+        console.log("Message sent successfully");
         logger.info(`[Chat Socket] Message ${messagePayload.messageId} sent by ${user.id} to conversation ${conversationId}`);
 
         if (callback) {
