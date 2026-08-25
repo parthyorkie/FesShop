@@ -89,7 +89,7 @@ export interface ServerToClientEvents {
   }) => void;
   'message:delivered': (payload: { conversationId: string; messageId: string; readerId: string; deliveredAt: Date | string }) => void;
   'message:read': (payload: { conversationId: string; messageId: string; readerId: string; readAt: Date | string }) => void;
-  'reaction:added': (payload: { conversationId: string; messageId: string; reaction: { userId: string; emoji: string; createdAt: Date | string } }) => void;
+  'reaction:added': (payload: { conversationId: string; messageId: string; reaction: { userId: string; emoji: string; createdAt: Date | string , _id?: string } }) => void;
   'reaction:removed': (payload: { conversationId: string; messageId: string; userId: string }) => void;
   'chat:error': (payload: { code: string | number; message: string; details?: Record<string, unknown> }) => void;
 }

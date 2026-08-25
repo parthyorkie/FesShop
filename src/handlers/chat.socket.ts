@@ -260,6 +260,7 @@ export const registerChatSocket = (io: TypedServer, socket: TypedSocket): void =
             userId: res.reaction.userId.toString(),
             emoji: res.reaction.emoji,
             createdAt: res.reaction.createdAt,
+            _id: res?.reaction?._id.toString(),
           }
         });
       }
@@ -277,7 +278,7 @@ export const registerChatSocket = (io: TypedServer, socket: TypedSocket): void =
   // --------------------------------------------------------------------------
   socket.on('reaction:remove', async (payload: { conversationId: string; messageId: string }, callback?: (response: { success: boolean; message?: string }) => void) => {
     try {
-      const { error, value } = socketMessageStatusSchema.validate(payload);
+      const { error, value } = socketReactionSchema.validate(payload);
       if (error) {
         const msg = error.details[0]?.message || 'Invalid payload';
         emitChatError(socket, 400, msg);
