@@ -143,23 +143,11 @@ export const registerChatSocket = (io: TypedServer, socket: TypedSocket): void =
           console.log("Message Data : ", message);
         }
 
-        const messagePayload = {
-          messageId: (message as any)._id.toString(),
-          conversationId: message.conversationId.toString(),
-          senderId: message.senderId.toString(),
-          clientMessageId: message.clientMessageId,
-          type: message.type,
-          text: message.text,
-          status: message.status,
-          createdAt: message.createdAt,
-          updatedAt: message.updatedAt,
-        };
-
         // Emit to all sockets in the conversation room
-        io.to(conversationId).emit('message:new', messagePayload);
+        io.to(conversationId).emit('message:new', message);
 
         console.log("Message sent successfully");
-        logger.info(`[Chat Socket] Message ${messagePayload.messageId} sent by ${user.id} to conversation ${conversationId}`);
+        logger.info(`[Chat Socket] Message ${message._id} sent by ${user.id} to conversation ${conversationId}`);
 
         if (callback) {
           callback({ success: true });
