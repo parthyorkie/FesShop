@@ -190,6 +190,30 @@ export const sendMissedCallNotification = async (
   }
 };
 
+export const sendOrderConfirmationNotification = async (
+  userId: string,
+  orderId: string,
+): Promise<boolean> => {
+  try {
+    if (!isReady()) return false;
+
+    const result = await sendNotification({
+      app_id: config.ONESIGNAL_APP_ID!,
+      include_external_user_ids: [userId],
+      headings: { en: 'Order confirmed' },
+      contents: { en: `Your order ${orderId} has been paid successfully.` },
+      data: { type: 'order_confirmation', orderId },
+      priority: 8,
+      ttl: 86400,
+    });
+
+    return !!result.id;
+  } catch (error: any) {
+    logNotificationError(userId, error.message || 'Order confirmation notification failed');
+    return false;
+  }
+};
+
 /**
  * Check if OneSignal is configured and ready
  */
@@ -201,5 +225,6 @@ export const isConfigured = (): boolean => {
 export const oneSignalService = {
   sendCallNotification,
   sendMissedCallNotification,
+  sendOrderConfirmationNotification,
   isConfigured,
 };

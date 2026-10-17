@@ -20,7 +20,7 @@ async function getTestTokens() {
 
         // Test user 2
         const user2 = {
-            email: 'parth@york.ie',
+            email: 'parth@gmail.ie',
             password: '123456',
             name: 'parth'
         };

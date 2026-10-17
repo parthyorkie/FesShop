@@ -1243,6 +1243,7 @@ export const initializeVideoCallSocket = (
   // Handle new connections
   io.on('connection', (socket: TypedSocket) => {
     const user = getSocketUser(socket);
+    void socket.join(`user:${user.id}`);
     logConnection(user.id, socket.id, user.name);
 
     // register counter socket events

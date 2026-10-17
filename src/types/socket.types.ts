@@ -92,6 +92,8 @@ export interface ServerToClientEvents {
   'reaction:added': (payload: { conversationId: string; messageId: string; reaction: { userId: string; emoji: string; createdAt: Date | string , _id?: string } }) => void;
   'reaction:removed': (payload: { conversationId: string; messageId: string; userId: string }) => void;
   'chat:error': (payload: { code: string | number; message: string; details?: Record<string, unknown> }) => void;
+  'payment:success': (payload: { orderId: string; transactionId: string; paymentStatus: 'PAID' }) => void;
+  'payment:failed': (payload: { orderId: string; reason: string }) => void;
 }
 
 // Inter-server events (for Redis adapter scalability)

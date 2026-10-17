@@ -26,7 +26,8 @@ export interface IOrder extends Document {
   festival?: Types.ObjectId;
 
   paymentMethod: "CASH" | "UPI" | "CARD";
-  paymentStatus: "PENDING" | "PAID";
+  paymentStatus: "UNPAID" | "PENDING" | "PAID" | "FAILED";
+  razorpayOrderId?: string;
 
   isDeleted: boolean;
   createdAt: Date;
@@ -126,8 +127,15 @@ const OrderSchema = new Schema<IOrder>(
 
     paymentStatus: {
       type: String,
-      enum: ["PENDING", "PAID"],
-      default: "PAID",
+      enum: ["UNPAID", "PENDING", "PAID", "FAILED"],
+      default: function (this: IOrder) {
+        return this.paymentMethod === "CASH" ? "PAID" : "UNPAID";
+      },
+    },
+
+    razorpayOrderId: {
+      type: String,
+      trim: true,
     },
 
     isDeleted: {

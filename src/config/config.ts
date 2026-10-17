@@ -22,6 +22,11 @@ export const config = {
 
   // Redis (optional - for Socket.IO adapter in production)
   REDIS_URL: process.env.REDIS_URL || '',
+
+  //RazorPay Secrets
+  RAZORPAY_KEY_ID:process.env.RAZORPAY_KEY_ID || '',
+  RAZORPAY_KEY_SECRET:process.env.RAZORPAY_KEY_SECRET || '',
+  RAZORPAY_WEBHOOK_SECRET:process.env.RAZORPAY_WEBHOOK_SECRET || '',
 };
 
 export default config;

@@ -35,3 +35,20 @@ export const getIO = (): TypedServer => {
   }
   return ioInstance;
 };
+  // New socket service for payment success
+export const socketService = {
+  emitPaymentSuccess: (userId: string, payload: {
+    orderId: string;
+    transactionId: string;
+    paymentStatus: 'PAID';
+  }): void => {
+    try {
+      getIO().to(`user:${userId}`).emit('payment:success', payload);
+    } catch {}
+  },
+  emitPaymentFailed: (userId: string, payload: { orderId: string; reason: string }): void => {
+    try {
+      getIO().to(`user:${userId}`).emit('payment:failed', payload);
+    } catch {}
+  },
+};

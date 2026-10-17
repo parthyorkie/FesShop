@@ -1,11 +1,13 @@
 import { Document, Schema, Types, model } from "mongoose";
 
 export type TransactionType = "SALE" | "PURCHASE" | "EXPENSE" | "REFUND";
-export type PaymentMethod = "CASH" | "UPI" | "CARD";
+export type PaymentMethod = "CASH" | "UPI" | "CARD" | "RAZORPAY";
 
 export interface ITransaction extends Document {
   // 🔗 References
   order?: Types.ObjectId;
+  orderId?: Types.ObjectId;
+  userId?: Types.ObjectId;
 //   product?: Types.ObjectId;
   customer?: Types.ObjectId;
 
@@ -22,6 +24,13 @@ export interface ITransaction extends Document {
   // 🔥 Core fields
   type: TransactionType;
   amount: number;
+
+  currency?: string;
+  paymentGateway?: "RAZORPAY";
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+  status?: "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
 
   paymentMethod: PaymentMethod;
 
@@ -60,6 +69,16 @@ const TransactionSchema = new Schema<ITransaction>(
       ref: "Order",
     },
 
+    orderId: {
+      type: Schema.Types.ObjectId,
+      ref: "Order",
+    },
+
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+
     // product: {
     //   type: Schema.Types.ObjectId,
     //   ref: "Product",
@@ -87,9 +106,29 @@ const TransactionSchema = new Schema<ITransaction>(
       min: 0,
     },
 
+    currency: {
+      type: String,
+      uppercase: true,
+      trim: true,
+    },
+
+    paymentGateway: {
+      type: String,
+      enum: ["RAZORPAY"],
+    },
+
+    razorpayOrderId: { type: String, trim: true },
+    razorpayPaymentId: { type: String, trim: true },
+    razorpaySignature: { type: String, trim: true },
+
+    status: {
+      type: String,
+      enum: ["PENDING", "SUCCESS", "FAILED", "REFUNDED"],
+    },
+
     paymentMethod: {
       type: String,
-      enum: ["CASH", "UPI", "CARD"],
+      enum: ["CASH", "UPI", "CARD", "RAZORPAY"],
       default: "CASH",
     },
 
@@ -124,6 +163,11 @@ TransactionSchema.index({ isDeleted: 1 });
 
 // 🔍 Relations
 TransactionSchema.index({ order: 1 });
+TransactionSchema.index({ orderId: 1, paymentGateway: 1 }, {
+  unique: true,
+  partialFilterExpression: { paymentGateway: "RAZORPAY" },
+});
+TransactionSchema.index({ razorpayOrderId: 1 }, { sparse: true });
 TransactionSchema.index({ product: 1 });
 TransactionSchema.index({ customer: 1 });
 

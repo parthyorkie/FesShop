@@ -22,6 +22,7 @@ import productRoutes from "./routes/product.routes";
 import sectionRoutes from "./routes/section.routes";
 import userRoutes from "./routes/user.routes";
 import chatRoutes from "./routes/chat.routes";
+import paymentRoutes from "./routes/payment.routes";
 import { initializeSocket } from "./services/socket.service";
 // import { initializeSocket } from "./services/socket.service";
 
@@ -37,7 +38,11 @@ app.use(cors());
 app.use('/api', apiLimiter);
 
 // Body parser
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buffer) => {
+    (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+  },
+}));
 
 // Routes
 if (authRoutes) {
@@ -52,6 +57,7 @@ app.use('/api/users', userRoutes);
 app.use("/api/sections", sectionRoutes);
 app.use("/api/orders", orderRoutes); // Importing order routes here to avoid circular dependency with order.model.ts
 app.use("/api/chat", chatRoutes);
+app.use("/api/v1/payments", paymentRoutes);
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
   res.sendStatus(200);

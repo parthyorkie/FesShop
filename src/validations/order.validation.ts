@@ -41,7 +41,7 @@ export const createOrderSchema = {
     festival: Joi.string().custom(objectId),
 
     paymentMethod: Joi.string().valid("CASH", "UPI", "CARD"),
-    paymentStatus: Joi.string().valid("PENDING", "PAID"),
+    paymentStatus: Joi.string().valid("UNPAID", "PENDING", "PAID", "FAILED"),
   }),
 };
 
@@ -73,7 +73,7 @@ export const updateOrderSchema = {
       festival: Joi.string().custom(objectId),
 
       paymentMethod: Joi.string().valid("CASH", "UPI", "CARD"),
-      paymentStatus: Joi.string().valid("PENDING", "PAID"),
+      paymentStatus: Joi.string().valid("UNPAID", "PENDING", "PAID", "FAILED"),
     })
     .min(1), // 🔥 at least one field required
 
@@ -108,7 +108,7 @@ export const listOrdersSchema = {
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(10),
 
-    paymentStatus: Joi.string().valid("PENDING", "PAID"),
+    paymentStatus: Joi.string().valid("UNPAID", "PENDING", "PAID", "FAILED"),
     paymentMethod: Joi.string().valid("CASH", "UPI", "CARD"),
 
     festival: Joi.string().custom(objectId),
